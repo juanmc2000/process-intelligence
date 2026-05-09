@@ -1,0 +1,4 @@
+-- Process Intelligence Platform — Postgres bootstrap
+-- The application database is created automatically via POSTGRES_DB.
+-- Temporal creates its own databases (temporal, temporal_visibility) via auto-setup.
+-- Application schema migrations will be applied separately via migration tooling.
