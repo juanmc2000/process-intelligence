@@ -4,7 +4,7 @@ from uuid import UUID
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from packages.core.database.repository import get_run
+from packages.core.database.repository import get_extraction_summary, get_run
 from packages.core.database.session import get_connection
 
 router = APIRouter(prefix="/runs", tags=["runs"])
@@ -37,6 +37,18 @@ class WorkflowEventResponse(BaseModel):
     created_at: Any
 
 
+class ExtractionSummaryResponse(BaseModel):
+    """Extraction progress and ProcessIR artifact reference.
+
+    Only metadata is returned — no raw LLM output or customer content.
+    """
+
+    extraction_run_id: UUID
+    status: str
+    process_ir_uri: Optional[str] = None
+    schema_version: Optional[str] = None
+
+
 class RunDetailResponse(BaseModel):
     id: UUID
     status: str
@@ -46,16 +58,27 @@ class RunDetailResponse(BaseModel):
     sources: list[SourceResponse]
     artifacts: list[ArtifactResponse]
     workflow_events: list[WorkflowEventResponse]
+    extraction: Optional[ExtractionSummaryResponse] = None
 
 
 @router.get("/{run_id}", response_model=RunDetailResponse)
 def get_run_status(run_id: UUID) -> RunDetailResponse:
-    """Return run metadata, sources, artifacts, and workflow events."""
+    """Return run metadata, sources, artifacts, workflow events, and extraction summary."""
     with get_connection() as conn:
         run = get_run(conn, run_id)
+        extraction = get_extraction_summary(conn, run_id)
 
     if run is None:
         raise HTTPException(status_code=404, detail=f"Run {run_id} not found")
+
+    extraction_response: Optional[ExtractionSummaryResponse] = None
+    if extraction:
+        extraction_response = ExtractionSummaryResponse(
+            extraction_run_id=extraction["extraction_run_id"],
+            status=extraction["status"],
+            process_ir_uri=extraction.get("process_ir_uri"),
+            schema_version=extraction.get("schema_version"),
+        )
 
     return RunDetailResponse(
         id=run["id"],
@@ -66,4 +89,5 @@ def get_run_status(run_id: UUID) -> RunDetailResponse:
         sources=[SourceResponse(**s) for s in run["sources"]],
         artifacts=[ArtifactResponse(**a) for a in run["artifacts"]],
         workflow_events=[WorkflowEventResponse(**e) for e in run["workflow_events"]],
+        extraction=extraction_response,
     )

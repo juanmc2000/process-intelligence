@@ -40,16 +40,25 @@ CREATE TABLE IF NOT EXISTS artifacts (
     id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     run_id              UUID NOT NULL REFERENCES runs(id) ON DELETE CASCADE,
     source_id           UUID REFERENCES sources(id) ON DELETE SET NULL,
-    artifact_type       TEXT NOT NULL,   -- 'raw' | 'parsed'
+    artifact_type       TEXT NOT NULL,
+    -- artifact_type values:
+    --   'raw'                  — original customer upload (MinIO raw/)
+    --   'normalized_evidence'  — structured parser output (MinIO normalized/)
+    --   'process_ir'           — durable ProcessIR extraction result (MinIO process_ir/)
     object_uri          TEXT NOT NULL,
     content_type        TEXT,
     size_bytes          BIGINT,
     schema_version      TEXT,
     created_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
-    -- retention / deletion support
+    -- Retention lifecycle support (SEC-001)
+    -- retention_class: 'temporary' = delete after next pipeline stage;
+    --                  'durable'   = keep until explicitly purged by policy
+    retention_class     TEXT NOT NULL DEFAULT 'temporary',
     deletion_eligible   BOOLEAN NOT NULL DEFAULT FALSE,
-    deleted_at          TIMESTAMPTZ
+    deleted_at          TIMESTAMPTZ,
+    -- purge_after: optional timestamp after which deletion_eligible may be set
+    purge_after         TIMESTAMPTZ
 );
 
 CREATE INDEX IF NOT EXISTS artifacts_run_id_idx ON artifacts(run_id);

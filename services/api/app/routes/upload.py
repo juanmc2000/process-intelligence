@@ -96,6 +96,7 @@ async def upload_file(file: UploadFile) -> UploadResponse:
             content_type=content_type,
             size_bytes=size_bytes,
             deletion_eligible=True,
+            retention_class="temporary",
         )
         create_workflow_event(
             conn,
