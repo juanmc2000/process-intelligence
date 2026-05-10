@@ -4,7 +4,9 @@ All functions accept an open psycopg2 connection and execute SQL against it.
 Callers control transaction boundaries via get_connection().
 """
 
-from typing import Any, Optional
+import json
+from datetime import datetime
+from typing import Any, List, Optional
 from uuid import UUID
 
 import psycopg2.extensions
@@ -49,16 +51,55 @@ def create_source(
     size_bytes: Optional[int] = None,
     input_hash: Optional[str] = None,
     status: str = "uploaded",
+    # Sprint 3: document / email lineage metadata
+    source_date: Optional[datetime] = None,
+    author: Optional[str] = None,
+    subject: Optional[str] = None,
+    sender: Optional[str] = None,
+    recipients: Optional[List[str]] = None,
+    message_id: Optional[str] = None,
+    thread_id: Optional[str] = None,
+    original_filename: Optional[str] = None,
+    mime_type: Optional[str] = None,
+    file_extension: Optional[str] = None,
+    parent_source_id: Optional[UUID] = None,
+    parent_artifact_id: Optional[UUID] = None,
 ) -> UUID:
     with conn.cursor() as cur:
         cur.execute(
             """
-            INSERT INTO sources
-                (run_id, filename, content_type, size_bytes, input_hash, status)
-            VALUES (%s, %s, %s, %s, %s, %s)
+            INSERT INTO sources (
+                run_id, filename, content_type, size_bytes, input_hash, status,
+                source_date, author, subject, sender, recipients,
+                message_id, thread_id, original_filename, mime_type, file_extension,
+                parent_source_id, parent_artifact_id
+            )
+            VALUES (%s, %s, %s, %s, %s, %s,
+                    %s, %s, %s, %s, %s,
+                    %s, %s, %s, %s, %s,
+                    %s, %s)
             RETURNING id
             """,
-            (str(run_id), filename, content_type, size_bytes, input_hash, status),
+            (
+                str(run_id),
+                filename,
+                content_type,
+                size_bytes,
+                input_hash,
+                status,
+                source_date,
+                author,
+                subject,
+                sender,
+                json.dumps(recipients) if recipients is not None else None,
+                message_id,
+                thread_id,
+                original_filename,
+                mime_type,
+                file_extension,
+                str(parent_source_id) if parent_source_id else None,
+                str(parent_artifact_id) if parent_artifact_id else None,
+            ),
         )
         return cur.fetchone()["id"]
 
@@ -118,8 +159,6 @@ def create_workflow_event(
     event_type: str,
     payload: Optional[dict[str, Any]] = None,
 ) -> UUID:
-    import json
-
     with conn.cursor() as cur:
         cur.execute(
             """

@@ -33,6 +33,31 @@ CREATE TABLE IF NOT EXISTS sources (
 CREATE INDEX IF NOT EXISTS sources_run_id_idx ON sources(run_id);
 
 -- ----------------------------------------------------------------
+-- Sprint 3 schema: source metadata for document and email lineage
+-- ----------------------------------------------------------------
+
+-- Document/email lineage fields on sources.
+-- None of these columns store raw content — metadata only.
+ALTER TABLE sources ADD COLUMN IF NOT EXISTS source_date       TIMESTAMPTZ;
+ALTER TABLE sources ADD COLUMN IF NOT EXISTS author            TEXT;
+ALTER TABLE sources ADD COLUMN IF NOT EXISTS subject           TEXT;
+ALTER TABLE sources ADD COLUMN IF NOT EXISTS sender            TEXT;
+-- recipients stored as a JSON array of address strings
+ALTER TABLE sources ADD COLUMN IF NOT EXISTS recipients        JSONB;
+ALTER TABLE sources ADD COLUMN IF NOT EXISTS message_id        TEXT;
+ALTER TABLE sources ADD COLUMN IF NOT EXISTS thread_id         TEXT;
+-- original_filename preserves the name before any normalisation
+ALTER TABLE sources ADD COLUMN IF NOT EXISTS original_filename TEXT;
+ALTER TABLE sources ADD COLUMN IF NOT EXISTS mime_type         TEXT;
+ALTER TABLE sources ADD COLUMN IF NOT EXISTS file_extension    TEXT;
+-- parent references for files extracted from a ZIP container
+ALTER TABLE sources ADD COLUMN IF NOT EXISTS parent_source_id   UUID REFERENCES sources(id) ON DELETE SET NULL;
+ALTER TABLE sources ADD COLUMN IF NOT EXISTS parent_artifact_id UUID REFERENCES artifacts(id) ON DELETE SET NULL;
+
+CREATE INDEX IF NOT EXISTS sources_parent_source_id_idx   ON sources(parent_source_id);
+CREATE INDEX IF NOT EXISTS sources_parent_artifact_id_idx ON sources(parent_artifact_id);
+
+-- ----------------------------------------------------------------
 -- artifacts: stored objects in object storage (raw or parsed)
 -- No raw customer content is stored here, only URIs.
 -- ----------------------------------------------------------------

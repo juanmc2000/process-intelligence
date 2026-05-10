@@ -1,4 +1,4 @@
-# Data Flow — Sprint 2 (Upload → Normalized Evidence → ProcessIR)
+# Data Flow — Sprint 3 (Upload → Normalized Evidence → ProcessIR)
 
 ## Happy Path
 
@@ -98,3 +98,27 @@ See `docs/adr/001-normalized-evidence-and-process-ir.md` for the full decision r
 Every step threads `run_id` through Postgres records and MinIO object keys.
 `workflow_events` provides a full audit trail. `extraction_runs` and `extraction_results`
 track each extraction attempt with schema_version for reproducibility.
+
+## Source Lineage Metadata (Sprint 3)
+
+The `sources` table carries optional lineage fields populated during parsing:
+
+| Field | Purpose |
+|---|---|
+| `source_date` | Document date or email date (not ingestion date) |
+| `author` | Document author or email sender name |
+| `subject` | Email subject or document title |
+| `sender` | Email From address |
+| `recipients` | JSONB array of To addresses |
+| `message_id` | Email Message-ID header |
+| `thread_id` | Email thread/References header |
+| `original_filename` | Filename before any normalisation |
+| `mime_type` | MIME type from upload or email part |
+| `file_extension` | Lowercased file extension |
+| `parent_source_id` | Source ID of the containing ZIP, if applicable |
+| `parent_artifact_id` | Artifact ID of the containing ZIP, if applicable |
+
+Child sources extracted from a ZIP reference their parent via `parent_source_id` / `parent_artifact_id`,
+preserving full lineage from child file back to the original upload.
+
+No raw document or email body content is stored in Postgres at any stage.
