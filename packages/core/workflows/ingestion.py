@@ -7,7 +7,9 @@ from temporalio.common import RetryPolicy
 
 with workflow.unsafe.imports_passed_through():
     from packages.core.workflows.activities import (
+        ExtractInput,
         ParseInput,
+        extract_process_ir,
         parse_artifact,
         update_run_to_processing,
     )
@@ -26,6 +28,12 @@ class IngestionRunWorkflow:
 
         Status transitions persisted in Postgres:
             uploaded → processing → completed | failed
+
+        Pipeline steps:
+            1. update_run_to_processing
+            2. parse_artifact  → normalized evidence artifact
+            3. extract_process_ir  → ProcessIR artifact (deterministic stub)
+            4. complete_run
         """
 
         await workflow.execute_activity(
@@ -36,7 +44,7 @@ class IngestionRunWorkflow:
         )
 
         try:
-            parsed_uri: str = await workflow.execute_activity(
+            parse_result: dict = await workflow.execute_activity(
                 parse_artifact,
                 ParseInput(
                     run_id=run_id, source_id=source_id, artifact_uri=artifact_uri
@@ -44,8 +52,19 @@ class IngestionRunWorkflow:
                 start_to_close_timeout=timedelta(minutes=5),
                 retry_policy=_RETRY,
             )
+
+            await workflow.execute_activity(
+                extract_process_ir,
+                ExtractInput(
+                    run_id=run_id,
+                    normalized_evidence_uri=parse_result["normalized_evidence_uri"],
+                    normalized_evidence_id=parse_result["normalized_evidence_id"],
+                ),
+                start_to_close_timeout=timedelta(minutes=5),
+                retry_policy=_RETRY,
+            )
+
         except Exception as exc:
-            # Record failure in Postgres; let Temporal mark the workflow as failed.
             await workflow.execute_activity(
                 _fail_run,
                 FailInput(run_id=run_id, error=str(exc)),
@@ -60,7 +79,7 @@ class IngestionRunWorkflow:
             start_to_close_timeout=timedelta(seconds=30),
             retry_policy=_RETRY,
         )
-        return parsed_uri
+        return parse_result["normalized_evidence_uri"]
 
 
 # ---------------------------------------------------------------------------

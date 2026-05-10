@@ -14,8 +14,10 @@ class ArtifactSchema(BaseModel):
     content_type: Optional[str] = None
     size_bytes: Optional[int] = None
     schema_version: Optional[str] = None
+    retention_class: str = "temporary"
     deletion_eligible: bool
     deleted_at: Optional[datetime] = None
+    purge_after: Optional[datetime] = None
     created_at: datetime
     updated_at: datetime
 

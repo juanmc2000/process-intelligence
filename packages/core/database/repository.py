@@ -85,14 +85,16 @@ def create_artifact(
     size_bytes: Optional[int] = None,
     schema_version: Optional[str] = None,
     deletion_eligible: bool = False,
+    retention_class: str = "temporary",
 ) -> UUID:
     with conn.cursor() as cur:
         cur.execute(
             """
             INSERT INTO artifacts
                 (run_id, source_id, artifact_type, object_uri,
-                 content_type, size_bytes, schema_version, deletion_eligible)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                 content_type, size_bytes, schema_version,
+                 deletion_eligible, retention_class)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
             RETURNING id
             """,
             (
@@ -104,6 +106,7 @@ def create_artifact(
                 size_bytes,
                 schema_version,
                 deletion_eligible,
+                retention_class,
             ),
         )
         return cur.fetchone()["id"]
