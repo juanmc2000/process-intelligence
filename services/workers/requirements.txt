@@ -2,3 +2,5 @@ temporalio==1.8.0
 minio==7.2.11
 psycopg2-binary==2.9.10
 pydantic==2.10.3
+# Sprint 3: text-readable PDF parsing (pure Python, no system deps required)
+pypdf==5.1.0

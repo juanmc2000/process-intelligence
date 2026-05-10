@@ -82,3 +82,30 @@ def upload_bytes(
 def default_bucket() -> str:
     """Return the configured default bucket name."""
     return os.environ["MINIO_DEFAULT_BUCKET"]
+
+
+def parse_object_uri(uri: str) -> tuple[str, str]:
+    """Split a minio://{bucket}/{key} URI into (bucket, key).
+
+    Raises ValueError for unrecognised URI schemes.
+    """
+    if not uri.startswith("minio://"):
+        raise ValueError(f"Unrecognised object URI scheme: {uri!r}")
+    # Strip the scheme prefix, then split on the first '/'
+    rest = uri[len("minio://") :]
+    bucket, _, key = rest.partition("/")
+    return bucket, key
+
+
+def download_bytes(client: Minio, bucket: str, key: str) -> bytes:
+    """Download an object from MinIO and return its raw bytes.
+
+    Does not log object contents.
+    Raises minio.S3Error on failure.
+    """
+    response = client.get_object(bucket_name=bucket, object_name=key)
+    try:
+        return response.read()
+    finally:
+        response.close()
+        response.release_conn()
