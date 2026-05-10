@@ -9,7 +9,7 @@ import psycopg2.extras
 def _dsn() -> str:
     return (
         f"host={os.environ.get('POSTGRES_HOST', 'postgres')} "
-        f"port={os.environ.get('POSTGRES_PORT', '5432')} "
+        f"port={os.environ.get('POSTGRES_INTERNAL_PORT', '5432')} "
         f"dbname={os.environ['POSTGRES_DB']} "
         f"user={os.environ['POSTGRES_USER']} "
         f"password={os.environ['POSTGRES_PASSWORD']}"

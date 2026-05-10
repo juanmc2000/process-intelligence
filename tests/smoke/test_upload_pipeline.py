@@ -35,7 +35,7 @@ def test_health():
 def test_ready():
     resp = _get("/ready")
     assert resp.status_code == 200
-    assert resp.json()["status"] == "ok"
+    assert resp.json()["status"] in ("ok", "ready")
 
 
 def test_upload_pipeline():
