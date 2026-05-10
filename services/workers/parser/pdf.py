@@ -57,7 +57,10 @@ def parse_pdf(data: bytes, filename: str) -> Dict[str, Any]:
 
     ext = os.path.splitext(filename)[1].lower() or ".pdf"
 
-    return {
+    # Detect image candidates using structural signals (no OCR, no vision model).
+    from services.workers.parser.image_candidates import score_candidates
+
+    base_metadata = {
         "format": "pdf",
         "original_filename": filename,
         "mime_type": "application/pdf",
@@ -67,6 +70,8 @@ def parse_pdf(data: bytes, filename: str) -> Dict[str, Any]:
         "image_count": image_count,
         "content_hash": content_hash,
     }
+    image_candidates = score_candidates(filename, base_metadata, reader=reader)
+    return {**base_metadata, "image_candidates": image_candidates}
 
 
 def _count_images(reader: Any) -> int:
