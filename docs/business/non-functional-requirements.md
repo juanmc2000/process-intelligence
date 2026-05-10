@@ -38,3 +38,23 @@
 
 - `GET /runs/{run_id}` must respond within 500ms under normal load.
 - The full upload-to-ProcessIR pipeline must complete within 90 seconds for artifacts under 10 MB.
+
+## Upload Limits
+
+- Maximum file size per upload: 50 MB (configurable via `UPLOAD_MAX_SIZE_MB`). Oversized files are rejected with HTTP 413 before any storage write occurs.
+- Maximum files per request: 20 (configurable via `UPLOAD_MAX_FILES`). Requests exceeding this limit are rejected with HTTP 422.
+- Limits are validated in the API layer before bytes are written to MinIO.
+
+## Ingestion Format Safety
+
+- ZIP archives must not contain path traversal entries (`..`, `//`, `\`). Such entries are silently skipped.
+- Nested ZIP files within a ZIP are not expanded. They are skipped to prevent recursive decompression attacks.
+- Individual ZIP member extraction is capped at 50 MB to prevent decompression bomb attacks.
+- Unsupported file types within a ZIP are skipped and counted in `skipped_count`; they do not cause pipeline failure.
+- Parser errors for any individual format fall through to the generic metadata handler; they do not halt the pipeline.
+
+## Parsing Scope
+
+- PDF parsing is text-extraction only (using `pypdf`). No OCR is performed. Image-only PDFs produce `text_char_count=0` without error.
+- EML parsing extracts headers and structural metadata only. Email body text is counted but not stored. Attachment bytes are not extracted.
+- Image candidate detection is purely rule-based. No OCR, no vision models, no network calls are made during parsing.
