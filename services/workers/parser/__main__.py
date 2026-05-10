@@ -9,6 +9,7 @@ from packages.core.workflows import (
     IngestionRunWorkflow,
     _complete_run,
     _fail_run,
+    extract_process_ir,
     make_temporal_client,
     parse_artifact,
     update_run_to_processing,
@@ -28,6 +29,7 @@ async def main() -> None:
         activities=[
             update_run_to_processing,
             parse_artifact,
+            extract_process_ir,
             _complete_run,
             _fail_run,
         ],
