@@ -51,16 +51,18 @@ def test_upload_pipeline():
     content = b"process: order-to-cash\nsteps: receive, validate, ship, invoice"
     resp = _post(
         "/runs/upload",
-        files={"file": ("test_process.txt", io.BytesIO(content), "text/plain")},
+        files=[("files", ("test_process.txt", io.BytesIO(content), "text/plain"))],
     )
     assert resp.status_code == 200, resp.text
     body = resp.json()
 
     run_id = body["run_id"]
     assert body["status"] == "uploaded"
-    assert body["object_uri"].startswith("minio://")
-    assert body["source_id"]
-    assert body["artifact_id"]
+    assert len(body["sources"]) == 1
+    source = body["sources"][0]
+    assert source["object_uri"].startswith("minio://")
+    assert source["source_id"]
+    assert source["artifact_id"]
 
     # Poll until the run reaches a terminal state
     deadline = time.monotonic() + _POLL_TIMEOUT
@@ -85,6 +87,40 @@ def test_upload_pipeline():
     _assert_process_ir_artifact(run_id, final_run)
     _assert_extraction_summary(run_id, final_run)
     _assert_no_raw_customer_content(final_run)
+
+
+def test_multi_file_upload():
+    """Multi-file upload creates one run and one source/artifact per file."""
+    file_a = b"process: order-to-cash\nsteps: receive, validate, ship, invoice"
+    file_b = b"process: invoice-to-pay\nsteps: receive, approve, pay"
+    resp = _post(
+        "/runs/upload",
+        files=[
+            ("files", ("process_a.txt", io.BytesIO(file_a), "text/plain")),
+            ("files", ("process_b.txt", io.BytesIO(file_b), "text/plain")),
+        ],
+    )
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+
+    assert body["status"] == "uploaded"
+    assert "run_id" in body
+    assert len(body["sources"]) == 2
+
+    filenames = {s["filename"] for s in body["sources"]}
+    assert "process_a.txt" in filenames
+    assert "process_b.txt" in filenames
+
+    for source in body["sources"]:
+        assert source["source_id"]
+        assert source["artifact_id"]
+        assert source["object_uri"].startswith("minio://")
+
+
+def test_empty_upload_rejected():
+    """POST /runs/upload with no files returns 422."""
+    resp = _post("/runs/upload", files=[])
+    assert resp.status_code == 422
 
 
 def _assert_normalized_evidence_artifact(run_id: str, run: dict) -> None:
