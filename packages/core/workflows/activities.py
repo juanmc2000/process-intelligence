@@ -158,6 +158,7 @@ def _dispatch_parse(raw_bytes: bytes, filename: str, content_type: str) -> dict:
     Returns a metadata dict merged into the normalized evidence JSON.
     Never logs or returns raw content.
     """
+    from services.workers.parser.eml import is_eml, parse_eml
     from services.workers.parser.pdf import is_pdf, parse_pdf
 
     if is_pdf(content_type, filename):
@@ -166,6 +167,14 @@ def _dispatch_parse(raw_bytes: bytes, filename: str, content_type: str) -> dict:
         except Exception as exc:
             # Non-fatal: fall back to generic metadata if PDF is unreadable.
             activity.logger.warning("PDF parse failed for '%s': %s", filename, exc)
+            return _generic_metadata(raw_bytes, filename, content_type)
+
+    if is_eml(content_type, filename):
+        try:
+            return parse_eml(raw_bytes, filename)
+        except Exception as exc:
+            # Non-fatal: fall back to generic metadata if EML is malformed.
+            activity.logger.warning("EML parse failed for '%s': %s", filename, exc)
             return _generic_metadata(raw_bytes, filename, content_type)
 
     return _generic_metadata(raw_bytes, filename, content_type)
