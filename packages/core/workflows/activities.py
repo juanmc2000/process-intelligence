@@ -24,6 +24,9 @@ class ParseInput:
     run_id: str
     source_id: str
     artifact_uri: str
+    # Optional hints passed from the upload route (Sprint 3)
+    content_type: str = ""
+    original_filename: str = ""
 
 
 @dataclass
@@ -47,6 +50,10 @@ async def update_run_to_processing(run_id: str) -> None:
 async def parse_artifact(inp: ParseInput) -> dict:
     """Parser activity — writes a normalized evidence artifact to MinIO.
 
+    Dispatches to format-specific parsers (PDF, EML, ZIP) based on
+    content_type and filename.  Falls back to a generic metadata stub for
+    any unsupported format.
+
     Normalized evidence contains structural metadata and source references only.
     No raw customer content is included in the output.
 
@@ -59,14 +66,30 @@ async def parse_artifact(inp: ParseInput) -> dict:
     from packages.core.storage.client import make_storage_client
     from packages.core.storage.operations import (
         default_bucket,
+        download_bytes,
         make_object_key,
         object_uri,
+        parse_object_uri,
         upload_bytes,
     )
 
-    # Build normalized evidence — structural metadata only, no file content
-    content_hash_input = f"{inp.run_id}:{inp.source_id}:{inp.artifact_uri}"
-    content_hash = "sha256:" + hashlib.sha256(content_hash_input.encode()).hexdigest()
+    storage = make_storage_client()
+    bucket = default_bucket()
+
+    # Download the raw artifact so format-specific parsers can read it.
+    raw_bucket, raw_key = parse_object_uri(inp.artifact_uri)
+    raw_bytes = download_bytes(storage, raw_bucket, raw_key)
+
+    filename = inp.original_filename or inp.artifact_uri.rsplit("/", 1)[-1]
+    content_type = inp.content_type or ""
+
+    # Dispatch to format-specific parsers; collect format metadata.
+    format_metadata: dict = _dispatch_parse(raw_bytes, filename, content_type)
+
+    content_hash = format_metadata.get(
+        "content_hash",
+        "sha256:" + hashlib.sha256(raw_bytes).hexdigest(),
+    )
 
     normalized_payload = json.dumps(
         {
@@ -76,11 +99,10 @@ async def parse_artifact(inp: ParseInput) -> dict:
             "schema_version": _NORMALIZED_EVIDENCE_SCHEMA_VERSION,
             "raw_artifact_uri": inp.artifact_uri,
             "content_hash": content_hash,
+            **format_metadata,
         }
     ).encode()
 
-    storage = make_storage_client()
-    bucket = default_bucket()
     key = make_object_key(
         inp.run_id, inp.source_id, "normalized_evidence.json", "normalized"
     )
@@ -116,11 +138,53 @@ async def parse_artifact(inp: ParseInput) -> dict:
             conn,
             UUID(inp.run_id),
             "parse_completed",
-            {"normalized_evidence_uri": uri},
+            {
+                "normalized_evidence_uri": uri,
+                "format": format_metadata.get("format", "unknown"),
+            },
         )
 
-    activity.logger.info("Parser complete for run %s", inp.run_id)
+    activity.logger.info(
+        "Parser complete for run %s (format=%s)",
+        inp.run_id,
+        format_metadata.get("format", "unknown"),
+    )
     return {"normalized_evidence_uri": uri, "normalized_evidence_id": str(ne_id)}
+
+
+def _dispatch_parse(raw_bytes: bytes, filename: str, content_type: str) -> dict:
+    """Route raw artifact bytes to the appropriate format parser.
+
+    Returns a metadata dict merged into the normalized evidence JSON.
+    Never logs or returns raw content.
+    """
+    from services.workers.parser.pdf import is_pdf, parse_pdf
+
+    if is_pdf(content_type, filename):
+        try:
+            return parse_pdf(raw_bytes, filename)
+        except Exception as exc:
+            # Non-fatal: fall back to generic metadata if PDF is unreadable.
+            activity.logger.warning("PDF parse failed for '%s': %s", filename, exc)
+            return _generic_metadata(raw_bytes, filename, content_type)
+
+    return _generic_metadata(raw_bytes, filename, content_type)
+
+
+def _generic_metadata(raw_bytes: bytes, filename: str, content_type: str) -> dict:
+    """Produce minimal structural metadata for unsupported/plain-text formats."""
+    import os
+
+    content_hash = "sha256:" + hashlib.sha256(raw_bytes).hexdigest()
+    ext = os.path.splitext(filename)[1].lower()
+    return {
+        "format": "generic",
+        "original_filename": filename,
+        "mime_type": content_type or "application/octet-stream",
+        "file_extension": ext,
+        "text_char_count": len(raw_bytes),
+        "content_hash": content_hash,
+    }
 
 
 @activity.defn(name="extract_process_ir")
