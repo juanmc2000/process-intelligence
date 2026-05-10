@@ -5,7 +5,7 @@ import os
 from typing import List
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException, UploadFile
+from fastapi import APIRouter, File, HTTPException, UploadFile
 from pydantic import BaseModel
 
 from packages.core.database.repository import (
@@ -56,7 +56,7 @@ class UploadResponse(BaseModel):
 
 
 @router.post("/upload", response_model=UploadResponse)
-async def upload_files(files: List[UploadFile]) -> UploadResponse:
+async def upload_files(files: List[UploadFile] = File(...)) -> UploadResponse:
     """Accept one or more files, store each in MinIO, and trigger the ingestion workflow.
 
     One run is created per request.  For each uploaded file a source record and
