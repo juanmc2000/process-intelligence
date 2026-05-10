@@ -1,0 +1,4 @@
+temporalio==1.8.0
+minio==7.2.11
+psycopg2-binary==2.9.10
+pydantic==2.10.3

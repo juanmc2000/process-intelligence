@@ -22,6 +22,8 @@ from packages.core.storage.operations import (
     object_uri,
     upload_fileobj,
 )
+from packages.core.workflows.client import make_temporal_client
+from packages.core.workflows.ingestion import IngestionRunWorkflow, TASK_QUEUE
 
 logger = logging.getLogger(__name__)
 
@@ -101,6 +103,15 @@ async def upload_file(file: UploadFile) -> UploadResponse:
             event_type="uploaded",
             payload={"source_id": str(source_id), "artifact_id": str(artifact_id)},
         )
+
+    # Start the Temporal workflow asynchronously — API remains stateless.
+    temporal = await make_temporal_client()
+    await temporal.start_workflow(
+        IngestionRunWorkflow.run,
+        args=[str(run_id), str(source_id), uri],
+        id=str(run_id),
+        task_queue=TASK_QUEUE,
+    )
 
     logger.info("Upload complete run_id=%s source_id=%s", run_id, source_id)
     return UploadResponse(
