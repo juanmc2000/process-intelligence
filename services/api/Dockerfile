@@ -2,12 +2,11 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-COPY requirements.txt .
+COPY services/api/requirements.txt requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 
-# packages/ is copied from the project root when the build context is .
-# docker-compose must set context: . and dockerfile: services/api/Dockerfile
-COPY app/ app/
+# Build context is project root (set in docker-compose.yml)
+COPY services/api/app/ app/
 COPY packages/ packages/
 
 ENV PYTHONPATH=/app
