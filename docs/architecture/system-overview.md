@@ -23,19 +23,37 @@ services/
   api/            FastAPI application
   workers/
     parser/       Temporal worker for the ingestion task queue
+      pdf.py      PDF text extraction and image candidate detection
+      eml.py      EML header/metadata extraction (no body content stored)
+      zip.py      ZIP expansion with path-traversal protection
+      image_candidates.py  Rule-based image candidate scoring
 
 packages/
   core/
     database/     psycopg2 session and SQL repository helpers
     storage/      MinIO client factory and object-key utilities
     workflows/    Temporal workflow and activity definitions
+    schemas/      Pydantic schemas: NormalizedEvidence, ProcessIR
 
 infra/
-  postgres/       init.sql — Sprint 1 schema bootstrap
+  postgres/       init.sql — Sprint 1–3 schema bootstrap
 
 tests/
   smoke/          End-to-end smoke tests (require docker compose up)
+  unit/           Unit tests for parser modules (no infrastructure required)
+  integration/    Integration tests for format dispatch (no infrastructure required)
 ```
+
+## Supported Upload Formats
+
+| Format | Detection | Notes |
+|---|---|---|
+| PDF | `.pdf` extension or `application/pdf` MIME | Text-readable only; no OCR |
+| EML | `.eml` extension or `message/rfc822` MIME | Headers and structure only; body text not stored |
+| ZIP | `.zip` extension or `application/zip` MIME | Expands `.pdf`, `.eml`, `.txt`, `.md` children; nested ZIPs skipped |
+| TXT / MD / other | Fallback | Character count and hash only |
+
+See `docs/architecture/data-flow.md` for full format behaviour and limits.
 
 ## Ports (local)
 

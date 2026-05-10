@@ -107,6 +107,57 @@ No raw customer content is stored or returned. Extraction status is visible via 
 
 ---
 
+## Sprint 3 — Multi-Format Ingestion and Image Candidate Detection
+
+**Goal:** The pipeline handles PDF, EML, ZIP, and generic uploads. Multi-file uploads are supported.
+ZIP files are expanded into child sources. Image candidates are detected rule-based (no OCR/vision).
+No raw content is stored or returned at any stage.
+
+### DATA-004 — Source lineage metadata
+- [ ] `sources` table carries `source_date`, `author`, `subject`, `sender`, `recipients`, `message_id`, `thread_id`, `original_filename`, `mime_type`, `file_extension`, `parent_source_id`, `parent_artifact_id`
+- [ ] Migration applied; no data loss on existing rows
+
+### PARSER-002 — PDF parsing
+- [ ] `parse_pdf(data, filename)` returns `format`, `page_count`, `text_char_count`, `image_count`, `content_hash`, `image_candidates`
+- [ ] `is_pdf(content_type, filename)` correctly identifies PDF files
+- [ ] Uses `pypdf` (pure Python); no OCR
+
+### PARSER-003 — EML parsing
+- [ ] `parse_eml(data, filename)` returns headers and structural metadata only
+- [ ] Body text char count included; raw body never stored or returned
+- [ ] Attachment names and sizes listed in `attachment_metadata`
+
+### PARSER-004 — ZIP expansion
+- [ ] `inspect_zip(data, filename)` returns ZIP metadata and child entries
+- [ ] Supported children: `.pdf`, `.eml`, `.txt`, `.md`
+- [ ] Path traversal rejected; nested ZIPs skipped; 50 MB per-member limit
+- [ ] Child sources created with `parent_source_id` referencing the ZIP source
+
+### PARSER-005 — Image candidate detection
+- [ ] `score_candidates(filename, format_metadata, reader)` returns candidate list
+- [ ] Filename-keyword detection: `flow`, `workflow`, `process`, `diagram`, `map`, `swimlane`, `chart`, `bpmn`, etc.
+- [ ] PDF page-level heuristics: low text density and keyword text signals
+- [ ] No OCR, no vision model, no network calls
+
+### API-005 — Multi-file upload
+- [ ] `POST /runs/upload` accepts 1–20 files (configurable via `UPLOAD_MAX_FILES`)
+- [ ] Per-file size limit 50 MB (configurable via `UPLOAD_MAX_SIZE_MB`)
+- [ ] Returns `{ run_id, status, sources: [{ source_id, artifact_id, filename, object_uri }] }`
+- [ ] One Temporal workflow started per source (workflow_id = `{run_id}-{source_id}`)
+
+### TEST-003 — Parser fixture tests
+- [ ] `tests/integration/test_parser_dispatch.py` covers PDF, EML, ZIP, and generic fallback
+- [ ] Tests use synthetic in-memory fixtures; no DB, MinIO, or Temporal required
+- [ ] All 12 integration tests pass
+
+### DOC-003 — Ingestion format documentation
+- [ ] `docs/architecture/data-flow.md` documents supported formats, limits, and ZIP/image-candidate behaviour
+- [ ] `docs/architecture/system-overview.md` lists supported formats and parser module layout
+- [ ] `docs/business/milestone-checkpoints.md` Sprint 3 section added
+- [ ] `docs/business/non-functional-requirements.md` upload limits and ZIP safety documented
+
+---
+
 ## Definition of Done (per Sprint)
 
 All checkpoints for the sprint pass. The smoke test suite runs green against
