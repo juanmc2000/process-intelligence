@@ -1,12 +1,11 @@
-# Sprint 1 Milestone Checkpoints
+# Milestone Checkpoints
 
-## Goal
+---
 
-Deliver a working upload-to-parsed-artifact pipeline: a client can upload a file,
-the system stores it, orchestrates parsing via Temporal, and returns a terminal
-run status with artifact references.
+## Sprint 1 — Upload to Parsed Artifact
 
-## Checkpoints
+**Goal:** A client can upload a file, the system stores it, orchestrates parsing via Temporal,
+and returns a terminal run status with artifact references.
 
 ### INFRA-001 — Docker Compose stack
 - [ ] `docker compose up -d` starts all services without errors
@@ -52,7 +51,64 @@ run status with artifact references.
 - [ ] `pytest tests/smoke/test_upload_pipeline.py` passes against a live stack
 - [ ] Upload completes with `status = "completed"` and a `parsed` artifact present
 
-## Definition of Done
+---
 
-All checkpoints above pass. The smoke test suite runs green against
-`docker compose up -d`. No critical errors in service logs.
+## Sprint 2 — Normalized Evidence and ProcessIR Extraction
+
+**Goal:** The pipeline produces schema-valid NormalizedEvidence and ProcessIR artifacts.
+No raw customer content is stored or returned. Extraction status is visible via the API.
+
+### DATA-003 — Extraction tables
+- [ ] `normalized_evidence`, `extraction_runs`, `extraction_results`, `model_invocations` tables exist
+- [ ] Tables support schema versioning and status tracking
+- [ ] No raw customer content stored in any table
+
+### SCHEMA-001 — Core schemas
+- [ ] `NormalizedEvidenceSchema` defined in `packages/core/schemas/`
+- [ ] `ProcessIR` schema with all sub-types defined in `packages/core/schemas/process_ir.py`
+- [ ] Schemas re-exported from `packages/core/process_ir/`
+
+### PARSER-001 — Normalized evidence artifact
+- [ ] Parser writes `normalized_evidence.json` to MinIO (no raw content)
+- [ ] `normalized_evidence` DB record created per parse
+- [ ] Source status updated to `parsed`
+
+### LLM-001 — ProcessIR extraction stub
+- [ ] `extract_process_ir` activity runs after parse
+- [ ] Writes schema-valid ProcessIR JSON to MinIO `process_ir/`
+- [ ] `extraction_runs` record created with status transitions
+- [ ] `extraction_results` record created with `process_ir_uri`
+- [ ] No external LLM calls made
+
+### API-004 — Extraction summary in run status
+- [ ] `GET /runs/{run_id}` includes `extraction` field
+- [ ] Extraction field includes `extraction_run_id`, `status`, `process_ir_uri`
+- [ ] Returns `extraction: null` for runs without extraction
+- [ ] No raw content in response
+
+### SEC-001 — Artifact retention lifecycle
+- [ ] `artifacts` table has `retention_class` and `purge_after` columns
+- [ ] Raw artifacts: `retention_class='temporary'`, `deletion_eligible=True`
+- [ ] Normalized evidence: `retention_class='temporary'`, `deletion_eligible=True`
+- [ ] ProcessIR: `retention_class='durable'`, `deletion_eligible=False`
+- [ ] Purge lifecycle documented in ADR-001
+
+### TEST-002 — Extended smoke test
+- [ ] Smoke test validates `normalized_evidence` artifact exists and is temporary
+- [ ] Smoke test validates `process_ir` artifact exists and is durable
+- [ ] Smoke test validates extraction summary in run status response
+- [ ] Smoke test confirms no raw customer content in API response
+- [ ] `make smoke` runs the test suite
+
+### DOC-002 — ADR and data-flow documentation
+- [ ] ADR-001 documents the four artifact tiers and zero-retention rationale
+- [ ] `docs/architecture/data-flow.md` updated to reflect Sprint 2 pipeline
+- [ ] Milestone checkpoints updated
+
+---
+
+## Definition of Done (per Sprint)
+
+All checkpoints for the sprint pass. The smoke test suite runs green against
+`docker compose up -d`. No critical errors in service logs. No raw customer
+content in Postgres, API responses, or worker logs.
