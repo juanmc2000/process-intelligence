@@ -133,6 +133,133 @@ def create_workflow_event(
         return cur.fetchone()["id"]
 
 
+def create_normalized_evidence(
+    conn: psycopg2.extensions.connection,
+    run_id: UUID,
+    artifact_uri: str,
+    parser_version: str,
+    schema_version: str,
+    source_id: Optional[UUID] = None,
+    artifact_id: Optional[UUID] = None,
+    content_hash: Optional[str] = None,
+    status: str = "ready",
+) -> UUID:
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            INSERT INTO normalized_evidence
+                (run_id, source_id, artifact_id, artifact_uri,
+                 content_hash, parser_version, schema_version, status)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            RETURNING id
+            """,
+            (
+                str(run_id),
+                str(source_id) if source_id else None,
+                str(artifact_id) if artifact_id else None,
+                artifact_uri,
+                content_hash,
+                parser_version,
+                schema_version,
+                status,
+            ),
+        )
+        return cur.fetchone()["id"]
+
+
+def create_extraction_run(
+    conn: psycopg2.extensions.connection,
+    run_id: UUID,
+    schema_version: str,
+    normalized_evidence_id: Optional[UUID] = None,
+    status: str = "pending",
+) -> UUID:
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            INSERT INTO extraction_runs
+                (run_id, normalized_evidence_id, schema_version, status)
+            VALUES (%s, %s, %s, %s)
+            RETURNING id
+            """,
+            (
+                str(run_id),
+                str(normalized_evidence_id) if normalized_evidence_id else None,
+                schema_version,
+                status,
+            ),
+        )
+        return cur.fetchone()["id"]
+
+
+def update_extraction_run_status(
+    conn: psycopg2.extensions.connection,
+    extraction_run_id: UUID,
+    status: str,
+    error_message: Optional[str] = None,
+) -> None:
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            UPDATE extraction_runs
+               SET status = %s, error_message = %s, updated_at = now()
+             WHERE id = %s
+            """,
+            (status, error_message, str(extraction_run_id)),
+        )
+
+
+def create_extraction_result(
+    conn: psycopg2.extensions.connection,
+    extraction_run_id: UUID,
+    run_id: UUID,
+    process_ir_uri: str,
+    schema_version: str,
+    status: str = "completed",
+) -> UUID:
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            INSERT INTO extraction_results
+                (extraction_run_id, run_id, process_ir_uri, schema_version, status)
+            VALUES (%s, %s, %s, %s, %s)
+            RETURNING id
+            """,
+            (
+                str(extraction_run_id),
+                str(run_id),
+                process_ir_uri,
+                schema_version,
+                status,
+            ),
+        )
+        return cur.fetchone()["id"]
+
+
+def get_extraction_summary(
+    conn: psycopg2.extensions.connection,
+    run_id: UUID,
+) -> Optional[dict[str, Any]]:
+    """Return the latest extraction result for a run, or None."""
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT er.id AS extraction_run_id,
+                   er.status,
+                   res.process_ir_uri,
+                   res.schema_version
+              FROM extraction_runs er
+              LEFT JOIN extraction_results res ON res.extraction_run_id = er.id
+             WHERE er.run_id = %s
+             ORDER BY er.created_at DESC
+             LIMIT 1
+            """,
+            (str(run_id),),
+        )
+        row = cur.fetchone()
+        return dict(row) if row else None
+
+
 def get_run(
     conn: psycopg2.extensions.connection,
     run_id: UUID,

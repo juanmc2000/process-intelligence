@@ -67,3 +67,69 @@ CREATE TABLE IF NOT EXISTS workflow_events (
 );
 
 CREATE INDEX IF NOT EXISTS workflow_events_run_id_idx ON workflow_events(run_id);
+
+-- ----------------------------------------------------------------
+-- Sprint 2 schema: extraction pipeline tables
+-- ----------------------------------------------------------------
+
+-- normalized_evidence: metadata and URI reference for the normalized parser output.
+-- No raw customer content is stored here — only URIs and structural metadata.
+CREATE TABLE IF NOT EXISTS normalized_evidence (
+    id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    run_id              UUID NOT NULL REFERENCES runs(id) ON DELETE CASCADE,
+    source_id           UUID REFERENCES sources(id) ON DELETE SET NULL,
+    artifact_id         UUID REFERENCES artifacts(id) ON DELETE SET NULL,
+    artifact_uri        TEXT NOT NULL,
+    content_hash        TEXT,
+    parser_version      TEXT NOT NULL,
+    schema_version      TEXT NOT NULL,
+    status              TEXT NOT NULL DEFAULT 'ready',
+    created_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at          TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS normalized_evidence_run_id_idx ON normalized_evidence(run_id);
+
+-- extraction_runs: one record per extraction attempt against a normalized evidence artifact.
+CREATE TABLE IF NOT EXISTS extraction_runs (
+    id                      UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    run_id                  UUID NOT NULL REFERENCES runs(id) ON DELETE CASCADE,
+    normalized_evidence_id  UUID REFERENCES normalized_evidence(id) ON DELETE SET NULL,
+    schema_version          TEXT NOT NULL,
+    status                  TEXT NOT NULL DEFAULT 'pending',
+    error_message           TEXT,
+    created_at              TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at              TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS extraction_runs_run_id_idx ON extraction_runs(run_id);
+
+-- extraction_results: URI reference to the ProcessIR artifact produced by an extraction run.
+-- No raw LLM output text is stored here.
+CREATE TABLE IF NOT EXISTS extraction_results (
+    id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    extraction_run_id   UUID NOT NULL REFERENCES extraction_runs(id) ON DELETE CASCADE,
+    run_id              UUID NOT NULL REFERENCES runs(id) ON DELETE CASCADE,
+    process_ir_uri      TEXT NOT NULL,
+    schema_version      TEXT NOT NULL,
+    status              TEXT NOT NULL DEFAULT 'completed',
+    created_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at          TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS extraction_results_extraction_run_id_idx ON extraction_results(extraction_run_id);
+CREATE INDEX IF NOT EXISTS extraction_results_run_id_idx ON extraction_results(run_id);
+
+-- model_invocations: audit record for each model call.
+-- Populated when a real LLM is invoked; stub runs may omit rows.
+-- Supports reproducibility tracking via model_name + prompt_version.
+CREATE TABLE IF NOT EXISTS model_invocations (
+    id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    extraction_run_id   UUID NOT NULL REFERENCES extraction_runs(id) ON DELETE CASCADE,
+    model_name          TEXT NOT NULL,
+    prompt_version      TEXT NOT NULL,
+    input_token_count   INTEGER,
+    output_token_count  INTEGER,
+    status              TEXT NOT NULL DEFAULT 'completed',
+    created_at          TIMESTAMPTZ NOT NULL DEFAULT now()
+);
