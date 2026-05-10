@@ -83,8 +83,17 @@ async def parse_artifact(inp: ParseInput) -> dict:
     filename = inp.original_filename or inp.artifact_uri.rsplit("/", 1)[-1]
     content_type = inp.content_type or ""
 
-    # Dispatch to format-specific parsers; collect format metadata.
-    format_metadata: dict = _dispatch_parse(raw_bytes, filename, content_type)
+    # ZIP archives are handled separately: child artifacts must be uploaded
+    # to MinIO and registered in Postgres before the normalized evidence is written.
+    from services.workers.parser.zip import is_zip
+
+    if is_zip(content_type, filename):
+        format_metadata = _handle_zip(
+            inp, raw_bytes, filename, content_type, storage, bucket
+        )
+    else:
+        # Dispatch to format-specific parsers; collect format metadata.
+        format_metadata: dict = _dispatch_parse(raw_bytes, filename, content_type)
 
     content_hash = format_metadata.get(
         "content_hash",
@@ -150,6 +159,87 @@ async def parse_artifact(inp: ParseInput) -> dict:
         format_metadata.get("format", "unknown"),
     )
     return {"normalized_evidence_uri": uri, "normalized_evidence_id": str(ne_id)}
+
+
+def _handle_zip(
+    inp: "ParseInput",
+    raw_bytes: bytes,
+    filename: str,
+    content_type: str,
+    storage: object,
+    bucket: str,
+) -> dict:
+    """Expand a ZIP archive, upload child artifacts to MinIO, and register them in Postgres.
+
+    Child sources and artifacts are created with parent_source_id linking them
+    to the parent ZIP source record.  Returns the ZIP-level metadata dict suitable
+    for merging into the normalized evidence JSON.
+    """
+    from packages.core.database.repository import create_artifact, create_source
+    from packages.core.storage.operations import (
+        make_object_key,
+        object_uri,
+        upload_bytes,
+    )
+    from services.workers.parser.zip import inspect_zip
+
+    try:
+        zip_metadata, child_entries = inspect_zip(raw_bytes, filename)
+    except Exception as exc:
+        activity.logger.warning("ZIP inspection failed for '%s': %s", filename, exc)
+        return _generic_metadata(raw_bytes, filename, content_type)
+
+    for entry in child_entries:
+        child_name = entry["name"]
+        child_data = entry["data"]
+        child_content_type = entry["content_type"]
+
+        # Upload child raw artifact to MinIO.
+        child_key = make_object_key(inp.run_id, inp.source_id, child_name, "raw_child")
+        upload_bytes(storage, bucket, child_key, child_data, child_content_type)
+        child_uri = object_uri(bucket, child_key)
+
+        # Register child source and artifact with parent lineage.
+        with get_connection() as conn:
+            child_source_id = create_source(
+                conn,
+                run_id=UUID(inp.run_id),
+                filename=child_name,
+                content_type=child_content_type,
+                size_bytes=entry["size_bytes"],
+                input_hash=entry["content_hash"],
+                status="uploaded",
+                original_filename=child_name,
+                mime_type=child_content_type,
+                parent_source_id=UUID(inp.source_id),
+            )
+            create_artifact(
+                conn,
+                run_id=UUID(inp.run_id),
+                artifact_type="raw_child",
+                object_uri=child_uri,
+                source_id=child_source_id,
+                content_type=child_content_type,
+                size_bytes=entry["size_bytes"],
+                deletion_eligible=True,
+                retention_class="temporary",
+            )
+            create_workflow_event(
+                conn,
+                UUID(inp.run_id),
+                "zip_child_extracted",
+                {
+                    "child_source_id": str(child_source_id),
+                    "child_name": child_name,
+                    "child_uri": child_uri,
+                },
+            )
+
+        activity.logger.info(
+            "ZIP child extracted for run %s: %s", inp.run_id, child_name
+        )
+
+    return zip_metadata
 
 
 def _dispatch_parse(raw_bytes: bytes, filename: str, content_type: str) -> dict:
