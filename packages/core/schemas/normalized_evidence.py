@@ -1,8 +1,53 @@
 from datetime import datetime
-from typing import Optional
+from typing import Any, Dict, List, Optional
 from uuid import UUID
 
 from pydantic import BaseModel
+
+
+class ImageCandidateMetadata(BaseModel):
+    """Metadata for a possible process-diagram image detected in a document.
+
+    No image content is stored — only positional and rule-based signals.
+    """
+
+    # Where in the document the candidate was found
+    page: Optional[int] = None
+    location_hint: Optional[str] = None
+    # Free-text reasons why this image was flagged (e.g. "filename_signal", "context_keyword")
+    reasons: List[str] = []
+    # 0.0–1.0 heuristic confidence (deterministic, not ML-derived)
+    confidence: float = 0.0
+
+
+class NormalizedEvidenceMetadata(BaseModel):
+    """Structured document/email metadata carried inside the normalized evidence artifact.
+
+    Stored in MinIO as part of the JSON artifact — not in Postgres.
+    No raw customer content (body text, file bytes) is included.
+    """
+
+    # Common document metadata
+    original_filename: Optional[str] = None
+    mime_type: Optional[str] = None
+    file_extension: Optional[str] = None
+    page_count: Optional[int] = None
+    text_char_count: Optional[int] = None
+
+    # Email-specific metadata
+    subject: Optional[str] = None
+    sender: Optional[str] = None
+    recipients: Optional[List[str]] = None
+    cc: Optional[List[str]] = None
+    message_id: Optional[str] = None
+    # Thread/references headers from the email
+    thread_references: Optional[List[str]] = None
+    source_date: Optional[datetime] = None
+    # Attachment filenames/sizes — no attachment content
+    attachment_metadata: Optional[List[Dict[str, Any]]] = None
+
+    # Image candidates detected in documents (metadata only, no OCR)
+    image_candidates: Optional[List[ImageCandidateMetadata]] = None
 
 
 class NormalizedEvidenceSchema(BaseModel):
