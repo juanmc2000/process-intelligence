@@ -371,6 +371,74 @@ def get_run(
 
 
 # ---------------------------------------------------------------------------
+# Sprint 6: Process exploration helpers
+# ---------------------------------------------------------------------------
+
+
+def list_extraction_results(
+    conn: psycopg2.extensions.connection,
+    limit: int = 100,
+    offset: int = 0,
+) -> list[dict[str, Any]]:
+    """Return a paginated list of completed extraction results with run metadata.
+
+    Returns structured metadata only — no raw customer content.
+    """
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT res.id AS extraction_result_id,
+                   er.id AS extraction_run_id,
+                   er.run_id,
+                   er.status AS extraction_status,
+                   res.process_ir_uri,
+                   res.schema_version,
+                   res.created_at,
+                   ne.source_id,
+                   s.filename
+              FROM extraction_results res
+              JOIN extraction_runs er ON er.id = res.extraction_run_id
+              LEFT JOIN normalized_evidence ne ON ne.id = er.normalized_evidence_id
+              LEFT JOIN sources s ON s.id = ne.source_id
+             WHERE er.status = 'completed'
+             ORDER BY res.created_at DESC
+             LIMIT %s OFFSET %s
+            """,
+            (limit, offset),
+        )
+        return [dict(row) for row in cur.fetchall()]
+
+
+def get_extraction_result_by_id(
+    conn: psycopg2.extensions.connection,
+    extraction_result_id: UUID,
+) -> Optional[dict[str, Any]]:
+    """Return a single extraction result by its id, or None."""
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT res.id AS extraction_result_id,
+                   er.id AS extraction_run_id,
+                   er.run_id,
+                   er.status AS extraction_status,
+                   res.process_ir_uri,
+                   res.schema_version,
+                   res.created_at,
+                   ne.source_id,
+                   s.filename
+              FROM extraction_results res
+              JOIN extraction_runs er ON er.id = res.extraction_run_id
+              LEFT JOIN normalized_evidence ne ON ne.id = er.normalized_evidence_id
+              LEFT JOIN sources s ON s.id = ne.source_id
+             WHERE res.id = %s
+            """,
+            (str(extraction_result_id),),
+        )
+        row = cur.fetchone()
+        return dict(row) if row else None
+
+
+# ---------------------------------------------------------------------------
 # Sprint 5: Human review and taxonomy feedback helpers
 # ---------------------------------------------------------------------------
 
