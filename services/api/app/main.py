@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 
+from app.routes.processes import router as processes_router
 from app.routes.review import router as review_router
 from app.routes.runs import router as runs_router
 from app.routes.upload import router as upload_router
@@ -9,6 +10,7 @@ app = FastAPI(title="Process Intelligence API")
 app.include_router(upload_router)
 app.include_router(runs_router)
 app.include_router(review_router)
+app.include_router(processes_router)
 
 
 @app.get("/health")
