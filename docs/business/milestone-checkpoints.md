@@ -287,6 +287,91 @@ for auditability and future supervised learning. No raw customer content is stor
 
 ---
 
+## Sprint 6 — Process Exploration, Similarity, Lineage, and Graph Visualisation
+
+**Goal:** Analysts can explore the full process library, understand how processes relate to each other via similarity grouping, track workflow evolution through change timelines, and visualise individual workflows as interactive graphs.
+
+### PROCESS-003 — Process similarity and clustering engine
+
+- [x] Process fingerprint generation exists (`make_fingerprint`)
+- [x] Similarity scoring exists (`score_similarity`) with dimension-level explanations
+- [x] Alias detection exists (`detect_aliases`) using union-find
+- [x] Candidate clustering exists (`cluster_processes`) with cohesion and merge recommendations
+- [x] Tests validate same-process grouping
+- [x] Tests validate unrelated-process separation
+- [x] Negative tests prevent over-grouping
+
+### PROCESS-004 — Process lineage and timeline engine
+
+- [x] Timeline reconstruction exists (`build_timeline`)
+- [x] Process lineage chain generation exists (`build_lineage_chain`)
+- [x] Superseded-process detection exists (`detect_superseded`)
+- [x] Change aggregation exists (`aggregate_changes`)
+- [x] Timeline summaries exist (`build_timeline_summary`)
+- [x] Tests validate version evolution
+- [x] Tests validate conflicting timeline handling
+
+### GRAPH-001 — Build workflow graph projection layer
+
+- [x] Graph projection exists (`project_graph`)
+- [x] Node generation works for all entity types
+- [x] Edge generation works (sequence, role, system, control)
+- [x] React Flow-compatible payload exists (`WorkflowGraph.to_react_flow`)
+- [x] Tests validate graph consistency
+- [x] Tests validate orphan handling
+
+### API-008 — Add process exploration endpoints
+
+- [x] `GET /processes` — paginated process candidate listing
+- [x] `GET /processes/groups` — similarity-based groupings
+- [x] `GET /processes/{id}` — full structured ProcessIR
+- [x] `GET /processes/{id}/timeline` — change timeline
+- [x] `GET /processes/{id}/graph` — React Flow graph
+- [x] All existing tests still pass
+
+### UI-005 — Workflow graph visualisation
+
+- [x] Workflow graph renders at `/processes/{id}/graph`
+- [x] Nodes render correctly by type with colour coding
+- [x] Edges render correctly with labels
+- [x] Metadata panel shows node/edge counts
+- [x] Zoom/pan and MiniMap work
+
+### UI-006 — Process exploration dashboard
+
+- [x] Process dashboard exists at `/processes`
+- [x] Similarity groups panel displays merge candidates
+- [x] Client-side filename/schema filter works
+- [x] Navigation to graph and timeline from each process
+
+### UI-007 — Process timeline visualisation
+
+- [x] Timeline visualisation exists at `/processes/{id}/timeline`
+- [x] Change events display with category badges
+- [x] From → to values display for structural changes
+- [x] Category filter works
+- [x] Evidence count and ambiguity warnings displayed
+
+### TEST-006 — Process similarity and graph tests
+
+- [x] Similarity tests exist (23 unit + integration)
+- [x] Timeline and lineage tests exist (27 unit + integration)
+- [x] Graph consistency tests exist (25 unit + integration)
+- [x] Duplicate handling tests exist
+- [x] 257 tests pass total (227 pre-Sprint-6 + 30 new integration)
+
+### DOC-006 — Process exploration architecture ADR
+
+- [x] ADR-004 documents similarity architecture (fingerprints, Jaccard, weights)
+- [x] Lineage architecture documented
+- [x] Graph projection architecture documented
+- [x] React Flow payload model documented
+- [x] Future graph DB path documented
+- [x] Future embedding strategy documented
+- [x] Sprint 6 milestone checkpoints added
+
+---
+
 ## Definition of Done (per Sprint)
 
 All checkpoints for the sprint pass. The smoke test suite runs green against

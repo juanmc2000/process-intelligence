@@ -1,4 +1,4 @@
-# Data Flow — Sprint 5 (Upload → Normalized Evidence → Deterministic Extraction → ProcessIR → Human Review)
+# Data Flow — Sprint 6 (Upload → Normalized Evidence → Deterministic Extraction → ProcessIR → Human Review → Process Exploration)
 
 ## Happy Path
 
@@ -229,3 +229,59 @@ Each candidate includes: `page` (None for filename-based), `location_hint`, `rea
 | Max files per request | 20 | `UPLOAD_MAX_FILES` |
 
 Files exceeding the size limit receive HTTP 413. Requests exceeding the file count limit receive HTTP 422.
+
+## Process Exploration Layer (Sprint 6)
+
+After extraction, ProcessIR artifacts accumulate in MinIO (one per source).  The process
+exploration layer makes this library navigable and comparable without requiring a graph database.
+
+### Process Identity and Similarity
+
+```
+ProcessIR (in MinIO)
+  │
+  │  make_fingerprint(process_ir)
+  ▼
+ProcessFingerprint
+  { step_labels, role_labels, system_labels, control_labels, ... }
+  │
+  │  score_similarity(fp_a, fp_b)  →  SimilarityScore { score, dimensions, explanation }
+  │
+  │  cluster_processes(fingerprints, threshold=0.50)  →  [ProcessCluster, ...]
+  │  detect_aliases(fingerprints, threshold=0.80)      →  [AliasGroup, ...]
+  ▼
+GET /processes/groups
+  { groups: [{ cluster_id, process_ids, cohesion, recommend_merge }] }
+```
+
+Similarity is computed as a weighted Jaccard score across six structural dimensions.
+See ADR-004 for weights and algorithm details.
+
+### Lineage and Timeline
+
+```
+ProcessIR (with change_events)
+  │
+  │  build_timeline(process_ir)     →  [TimelineEvent, ...]
+  │  build_lineage_chain([v1, v2])  →  LineageChain { versions, timeline, summary }
+  │  detect_superseded([p1, p2])    →  [superseded_process_id, ...]
+  ▼
+GET /processes/{id}/timeline
+  { events: [{ event_id, description, category, from_value, to_value }], summary: {...} }
+```
+
+### Graph Projection
+
+```
+ProcessIR
+  │
+  │  project_graph(process_ir)  →  WorkflowGraph
+  │  graph.to_react_flow()      →  { processId, nodes, edges, metadata }
+  ▼
+GET /processes/{id}/graph
+  →  Frontend React Flow canvas
+```
+
+No database writes occur in the exploration layer.  All projections are computed on-demand
+from ProcessIR artifacts stored in MinIO.  Entity IDs are preserved end-to-end so graph nodes
+link back to human review records.
