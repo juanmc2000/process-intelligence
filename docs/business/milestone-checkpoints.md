@@ -158,6 +158,59 @@ No raw content is stored or returned at any stage.
 
 ---
 
+## Sprint 4 — Deterministic Extraction and Evaluation
+
+**Goal:** The pipeline produces meaningful ProcessIR from text evidence using deterministic, non-LLM extraction algorithms. Extraction quality is measurable via gold fixtures and evaluation metrics. A new API endpoint exposes ProcessIR output.
+
+### EXTRACT-001 — Deterministic operational process extractor
+- [ ] Gazetteer extraction works (systems, roles, departments, controls, workflow objects)
+- [ ] Alias matching works with canonical ID resolution
+- [ ] Longest-span match resolution works
+- [ ] Regex operational patterns emit entities and relations
+- [ ] Action classification interface exists (deterministic, TF-IDF compatible)
+- [ ] Relation extractor emits typed relations (approves, rejects, escalates_to, handoff_to, etc.)
+- [ ] Temporal cue extraction works (precedes, follows, triggered_by, conditioned_on)
+- [ ] Handoff detection works (assigned to, sent to, forwarded to)
+- [ ] Control detection works (approval, reconciliation, SOD, threshold, validation, access, audit)
+- [ ] Change-history extraction works (changed from X to Y)
+- [ ] Every entity has confidence and method
+- [ ] Every relation has confidence and method
+- [ ] Negative/speculative statements are not treated as completed workflow facts
+- [ ] Unit tests cover entity extraction, relation extraction, and negative examples
+
+### EVAL-001 — Extraction gold fixtures and evaluation helpers
+- [ ] Gold fixture file exists with 12 synthetic examples
+- [ ] Entity evaluation helper (precision, recall, F1) exists
+- [ ] Relation evaluation helper exists
+- [ ] Action label evaluation helper exists
+- [ ] Negative examples are included
+- [ ] Tests validate metrics work as expected
+
+### API-006 — ProcessIR artifact retrieval endpoint
+- [ ] `GET /runs/{run_id}/process-ir` returns ProcessIR for a completed run
+- [ ] Endpoint includes schema_version and extraction status
+- [ ] Endpoint does not return raw source content
+- [ ] Missing ProcessIR returns appropriate error/status
+- [ ] Confidence summary included in response
+
+### TEST-004 — End-to-end extraction quality tests
+- [ ] End-to-end test validates ProcessIR output from uploaded evidence
+- [ ] Approval/system relation is tested
+- [ ] Handoff or escalation relation is tested
+- [ ] Control extraction is tested
+- [ ] Change-event extraction is tested
+- [ ] Negative/speculative example is tested
+
+### DOC-004 — Deterministic extraction architecture documentation
+- [ ] ADR-002 documents deterministic extraction architecture and algorithm boundaries
+- [ ] Confidence scoring is documented
+- [ ] Entity and relation types are documented
+- [ ] Negative/speculative handling is documented
+- [ ] Evaluation approach is documented
+- [ ] Sprint 4 milestone checkpoint is added
+
+---
+
 ## Definition of Done (per Sprint)
 
 All checkpoints for the sprint pass. The smoke test suite runs green against

@@ -34,6 +34,7 @@ packages/
     storage/      MinIO client factory and object-key utilities
     workflows/    Temporal workflow and activity definitions
     schemas/      Pydantic schemas: NormalizedEvidence, ProcessIR
+    process_ir/   Deterministic extraction: gazetteer, patterns, classifier, relations, evaluation
 
 infra/
   postgres/       init.sql — Sprint 1–3 schema bootstrap
