@@ -1,4 +1,10 @@
 from packages.core.process_ir.extractor import extract
+from packages.core.process_ir.graph import (
+    GraphEdge,
+    GraphNode,
+    WorkflowGraph,
+    project_graph,
+)
 from packages.core.process_ir.lineage import (
     ChangeCategory,
     LineageChain,
@@ -68,6 +74,11 @@ __all__ = [
     "ActionClass",
     "ControlType",
     "ExtractionMethod",
+    # Graph projection types
+    "GraphNode",
+    "GraphEdge",
+    "WorkflowGraph",
+    "project_graph",
     # Lineage types
     "ChangeCategory",
     "TimelineEvent",
