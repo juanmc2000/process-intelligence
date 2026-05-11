@@ -6,6 +6,12 @@ from packages.core.models.extraction import (
     ModelInvocation,
     NormalizedEvidenceRecord,
 )
+from packages.core.models.review import (
+    EntityReview,
+    RelationReview,
+    ReviewSession,
+    TaxonomyFeedback,
+)
 from packages.core.models.runs import Run
 from packages.core.models.sources import Source
 
@@ -18,4 +24,8 @@ __all__ = [
     "ExtractionRun",
     "ExtractionResult",
     "ModelInvocation",
+    "ReviewSession",
+    "EntityReview",
+    "RelationReview",
+    "TaxonomyFeedback",
 ]

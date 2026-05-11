@@ -17,6 +17,18 @@ from packages.core.schemas.process_ir import (
     SystemTouchpoint,
     WorkflowStep,
 )
+from packages.core.schemas.review import (
+    EntityReviewCreate,
+    EntityReviewSchema,
+    FeedbackType,
+    RelationReviewCreate,
+    RelationReviewSchema,
+    ReviewSessionCreate,
+    ReviewSessionSchema,
+    ReviewState,
+    TaxonomyFeedbackCreate,
+    TaxonomyFeedbackSchema,
+)
 from packages.core.schemas.runs import RunSchema
 from packages.core.schemas.sources import SourceSchema
 
@@ -38,4 +50,14 @@ __all__ = [
     "ProcessException",
     "ChangeEvent",
     "EvidenceRef",
+    "ReviewSessionCreate",
+    "ReviewSessionSchema",
+    "EntityReviewCreate",
+    "EntityReviewSchema",
+    "RelationReviewCreate",
+    "RelationReviewSchema",
+    "TaxonomyFeedbackCreate",
+    "TaxonomyFeedbackSchema",
+    "ReviewState",
+    "FeedbackType",
 ]
