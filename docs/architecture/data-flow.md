@@ -1,4 +1,4 @@
-# Data Flow — Sprint 3 (Upload → Normalized Evidence → ProcessIR)
+# Data Flow — Sprint 4 (Upload → Normalized Evidence → Deterministic Extraction → ProcessIR)
 
 ## Happy Path
 
@@ -41,7 +41,19 @@ Temporal (IngestionRunWorkflow)
   │
   │  Activity: extract_process_ir
   │    → Create extraction_run record (status = "running")
-  │    → Build ProcessIR JSON (deterministic stub — no LLM call)
+  │    → Download normalized evidence from MinIO to get raw_artifact_uri
+  │    → Download raw artifact and extract text (UTF-8 / PDF / EML)
+  │    → Run deterministic extraction pipeline:
+  │        1. Sentence splitting
+  │        2. Negation/speculative filtering
+  │        3. Gazetteer matching (systems, roles, departments, controls, etc.)
+  │        4. Regex pattern extraction (approvals, rejections, handoffs, etc.)
+  │        5. Action classification
+  │        6. Relation extraction
+  │        7. Temporal cue detection
+  │        8. Control relation building
+  │        9. Change-event detection
+  │    → Convert ExtractionResult to ProcessIR schema
   │    → Write to MinIO  →  minio://artifacts/process_ir/<run_id>/...
   │    → Create artifact record (artifact_type="process_ir", retention_class="durable")
   │    → Create extraction_result record
