@@ -1,4 +1,15 @@
 from packages.core.process_ir.extractor import extract
+from packages.core.process_ir.similarity import (
+    AliasGroup,
+    DimensionScore,
+    ProcessCluster,
+    ProcessFingerprint,
+    SimilarityScore,
+    cluster_processes,
+    detect_aliases,
+    make_fingerprint,
+    score_similarity,
+)
 from packages.core.process_ir.types import (
     ActionClass,
     ActionClassification,
@@ -46,4 +57,14 @@ __all__ = [
     "ActionClass",
     "ControlType",
     "ExtractionMethod",
+    # Similarity types
+    "ProcessFingerprint",
+    "SimilarityScore",
+    "DimensionScore",
+    "AliasGroup",
+    "ProcessCluster",
+    "make_fingerprint",
+    "score_similarity",
+    "detect_aliases",
+    "cluster_processes",
 ]
