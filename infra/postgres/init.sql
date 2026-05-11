@@ -167,3 +167,100 @@ CREATE TABLE IF NOT EXISTS model_invocations (
     status              TEXT NOT NULL DEFAULT 'completed',
     created_at          TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+-- ----------------------------------------------------------------
+-- Sprint 5 schema: human review and feedback tables
+-- No raw customer content is stored. All reviews reference
+-- ProcessIR entity/relation IDs and structured metadata only.
+-- ----------------------------------------------------------------
+
+-- review_sessions: groups entity and relation reviews for a single run.
+-- reviewer_id is a free-form string (e.g. email) — no auth system yet.
+CREATE TABLE IF NOT EXISTS review_sessions (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    run_id          UUID NOT NULL REFERENCES runs(id) ON DELETE CASCADE,
+    reviewer_id     TEXT,
+    -- status: open | completed | abandoned
+    status          TEXT NOT NULL DEFAULT 'open',
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS review_sessions_run_id_idx ON review_sessions(run_id);
+
+-- entity_reviews: one row per human decision on a ProcessIR entity.
+-- entity_type mirrors ProcessIR entity categories (workflow_step, role, etc.).
+-- review_state values: accepted | rejected | edited | merged | split | confidence_override
+-- edited_label / edited_canonical_label hold new values only when review_state = 'edited'.
+-- confidence_override is only populated when review_state = 'confidence_override'.
+CREATE TABLE IF NOT EXISTS entity_reviews (
+    id                      UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    review_session_id       UUID NOT NULL REFERENCES review_sessions(id) ON DELETE CASCADE,
+    run_id                  UUID NOT NULL REFERENCES runs(id) ON DELETE CASCADE,
+    -- entity_type: workflow_step | role | system_touchpoint | control | exception
+    --              | change_event | decision_point
+    entity_type             TEXT NOT NULL,
+    -- entity_id references the id field inside the ProcessIR JSON (not a FK)
+    entity_id               TEXT NOT NULL,
+    -- review_state: accepted | rejected | edited | merged | split | confidence_override
+    review_state            TEXT NOT NULL,
+    original_label          TEXT,
+    edited_label            TEXT,
+    original_canonical_label TEXT,
+    edited_canonical_label  TEXT,
+    -- confidence_override: reviewer-supplied confidence score (0.0–1.0)
+    confidence_override     NUMERIC(4,3),
+    reviewer_note           TEXT,
+    created_at              TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at              TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS entity_reviews_session_id_idx ON entity_reviews(review_session_id);
+CREATE INDEX IF NOT EXISTS entity_reviews_run_id_idx     ON entity_reviews(run_id);
+-- unique constraint allows upsert on (session, entity)
+CREATE UNIQUE INDEX IF NOT EXISTS entity_reviews_session_entity_uidx
+    ON entity_reviews(review_session_id, entity_id);
+
+-- relation_reviews: one row per human decision on a ProcessIR relation.
+-- Relations are modelled as directed edges between two ProcessIR entity IDs.
+-- review_state values match entity_reviews for consistency.
+CREATE TABLE IF NOT EXISTS relation_reviews (
+    id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    review_session_id   UUID NOT NULL REFERENCES review_sessions(id) ON DELETE CASCADE,
+    run_id              UUID NOT NULL REFERENCES runs(id) ON DELETE CASCADE,
+    -- relation_type: free-form label (e.g. 'uses_system', 'performed_by')
+    relation_type       TEXT NOT NULL,
+    source_entity_id    TEXT NOT NULL,
+    target_entity_id    TEXT NOT NULL,
+    -- review_state: accepted | rejected | edited | merged | split | confidence_override
+    review_state        TEXT NOT NULL,
+    original_label      TEXT,
+    edited_label        TEXT,
+    reviewer_note       TEXT,
+    created_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at          TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS relation_reviews_session_id_idx ON relation_reviews(review_session_id);
+CREATE INDEX IF NOT EXISTS relation_reviews_run_id_idx     ON relation_reviews(run_id);
+-- unique constraint allows upsert on (session, source, target, type)
+CREATE UNIQUE INDEX IF NOT EXISTS relation_reviews_session_edge_uidx
+    ON relation_reviews(review_session_id, source_entity_id, target_entity_id, relation_type);
+
+-- taxonomy_feedback: reviewer suggestions for improving taxonomy labels.
+-- feedback_type: new_label | merge_suggestion | split_suggestion | other
+-- Does not store raw customer text — only structured taxonomy suggestions.
+CREATE TABLE IF NOT EXISTS taxonomy_feedback (
+    id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    review_session_id   UUID REFERENCES review_sessions(id) ON DELETE SET NULL,
+    run_id              UUID NOT NULL REFERENCES runs(id) ON DELETE CASCADE,
+    entity_type         TEXT NOT NULL,
+    entity_id           TEXT NOT NULL,
+    -- feedback_type: new_label | merge_suggestion | split_suggestion | other
+    feedback_type       TEXT NOT NULL,
+    proposed_label      TEXT,
+    notes               TEXT,
+    created_at          TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS taxonomy_feedback_run_id_idx ON taxonomy_feedback(run_id);

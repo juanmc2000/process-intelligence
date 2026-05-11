@@ -368,3 +368,242 @@ def get_run(
         "artifacts": [dict(a) for a in artifacts],
         "workflow_events": [dict(e) for e in events],
     }
+
+
+# ---------------------------------------------------------------------------
+# Sprint 5: Human review and taxonomy feedback helpers
+# ---------------------------------------------------------------------------
+
+
+def create_review_session(
+    conn: psycopg2.extensions.connection,
+    run_id: UUID,
+    reviewer_id: Optional[str] = None,
+    status: str = "open",
+) -> UUID:
+    """Create a review session for a run and return its id."""
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            INSERT INTO review_sessions (run_id, reviewer_id, status)
+            VALUES (%s, %s, %s)
+            RETURNING id
+            """,
+            (str(run_id), reviewer_id, status),
+        )
+        return cur.fetchone()["id"]
+
+
+def get_review_session(
+    conn: psycopg2.extensions.connection,
+    session_id: UUID,
+) -> Optional[dict[str, Any]]:
+    """Return a review session by id, or None."""
+    with conn.cursor() as cur:
+        cur.execute(
+            "SELECT * FROM review_sessions WHERE id = %s",
+            (str(session_id),),
+        )
+        row = cur.fetchone()
+        return dict(row) if row else None
+
+
+def list_review_sessions_for_run(
+    conn: psycopg2.extensions.connection,
+    run_id: UUID,
+) -> list[dict[str, Any]]:
+    """Return all review sessions for a run, newest first."""
+    with conn.cursor() as cur:
+        cur.execute(
+            "SELECT * FROM review_sessions WHERE run_id = %s ORDER BY created_at DESC",
+            (str(run_id),),
+        )
+        return [dict(r) for r in cur.fetchall()]
+
+
+def upsert_entity_review(
+    conn: psycopg2.extensions.connection,
+    review_session_id: UUID,
+    run_id: UUID,
+    entity_type: str,
+    entity_id: str,
+    review_state: str,
+    original_label: Optional[str] = None,
+    edited_label: Optional[str] = None,
+    original_canonical_label: Optional[str] = None,
+    edited_canonical_label: Optional[str] = None,
+    confidence_override: Optional[float] = None,
+    reviewer_note: Optional[str] = None,
+) -> UUID:
+    """Insert or update an entity review.
+
+    If a review already exists for (review_session_id, entity_id), update it.
+    This preserves audit history via updated_at rather than creating duplicate rows.
+    """
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            INSERT INTO entity_reviews (
+                review_session_id, run_id, entity_type, entity_id, review_state,
+                original_label, edited_label,
+                original_canonical_label, edited_canonical_label,
+                confidence_override, reviewer_note
+            )
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            ON CONFLICT (review_session_id, entity_id)
+            DO UPDATE SET
+                review_state             = EXCLUDED.review_state,
+                edited_label             = EXCLUDED.edited_label,
+                edited_canonical_label   = EXCLUDED.edited_canonical_label,
+                confidence_override      = EXCLUDED.confidence_override,
+                reviewer_note            = EXCLUDED.reviewer_note,
+                updated_at               = now()
+            RETURNING id
+            """,
+            (
+                str(review_session_id),
+                str(run_id),
+                entity_type,
+                entity_id,
+                review_state,
+                original_label,
+                edited_label,
+                original_canonical_label,
+                edited_canonical_label,
+                confidence_override,
+                reviewer_note,
+            ),
+        )
+        return cur.fetchone()["id"]
+
+
+def get_entity_reviews_for_run(
+    conn: psycopg2.extensions.connection,
+    run_id: UUID,
+) -> list[dict[str, Any]]:
+    """Return all entity reviews for a run, ordered by entity_type and entity_id."""
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT er.*
+              FROM entity_reviews er
+             WHERE er.run_id = %s
+             ORDER BY er.entity_type, er.entity_id, er.updated_at DESC
+            """,
+            (str(run_id),),
+        )
+        return [dict(r) for r in cur.fetchall()]
+
+
+def upsert_relation_review(
+    conn: psycopg2.extensions.connection,
+    review_session_id: UUID,
+    run_id: UUID,
+    relation_type: str,
+    source_entity_id: str,
+    target_entity_id: str,
+    review_state: str,
+    original_label: Optional[str] = None,
+    edited_label: Optional[str] = None,
+    reviewer_note: Optional[str] = None,
+) -> UUID:
+    """Insert or update a relation review.
+
+    If a review already exists for (review_session_id, source_entity_id,
+    target_entity_id, relation_type), update it.
+    """
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            INSERT INTO relation_reviews (
+                review_session_id, run_id, relation_type,
+                source_entity_id, target_entity_id, review_state,
+                original_label, edited_label, reviewer_note
+            )
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+            ON CONFLICT (review_session_id, source_entity_id, target_entity_id, relation_type)
+            DO UPDATE SET
+                review_state  = EXCLUDED.review_state,
+                edited_label  = EXCLUDED.edited_label,
+                reviewer_note = EXCLUDED.reviewer_note,
+                updated_at    = now()
+            RETURNING id
+            """,
+            (
+                str(review_session_id),
+                str(run_id),
+                relation_type,
+                source_entity_id,
+                target_entity_id,
+                review_state,
+                original_label,
+                edited_label,
+                reviewer_note,
+            ),
+        )
+        return cur.fetchone()["id"]
+
+
+def get_relation_reviews_for_run(
+    conn: psycopg2.extensions.connection,
+    run_id: UUID,
+) -> list[dict[str, Any]]:
+    """Return all relation reviews for a run."""
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT rr.*
+              FROM relation_reviews rr
+             WHERE rr.run_id = %s
+             ORDER BY rr.relation_type, rr.source_entity_id, rr.updated_at DESC
+            """,
+            (str(run_id),),
+        )
+        return [dict(r) for r in cur.fetchall()]
+
+
+def create_taxonomy_feedback(
+    conn: psycopg2.extensions.connection,
+    run_id: UUID,
+    entity_type: str,
+    entity_id: str,
+    feedback_type: str,
+    review_session_id: Optional[UUID] = None,
+    proposed_label: Optional[str] = None,
+    notes: Optional[str] = None,
+) -> UUID:
+    """Insert a taxonomy feedback record and return its id."""
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            INSERT INTO taxonomy_feedback (
+                review_session_id, run_id, entity_type, entity_id,
+                feedback_type, proposed_label, notes
+            )
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            RETURNING id
+            """,
+            (
+                str(review_session_id) if review_session_id else None,
+                str(run_id),
+                entity_type,
+                entity_id,
+                feedback_type,
+                proposed_label,
+                notes,
+            ),
+        )
+        return cur.fetchone()["id"]
+
+
+def get_taxonomy_feedback_for_run(
+    conn: psycopg2.extensions.connection,
+    run_id: UUID,
+) -> list[dict[str, Any]]:
+    """Return all taxonomy feedback for a run."""
+    with conn.cursor() as cur:
+        cur.execute(
+            "SELECT * FROM taxonomy_feedback WHERE run_id = %s ORDER BY created_at",
+            (str(run_id),),
+        )
+        return [dict(r) for r in cur.fetchall()]
