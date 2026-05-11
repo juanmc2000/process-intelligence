@@ -1,4 +1,4 @@
-# Data Flow — Sprint 4 (Upload → Normalized Evidence → Deterministic Extraction → ProcessIR)
+# Data Flow — Sprint 5 (Upload → Normalized Evidence → Deterministic Extraction → ProcessIR → Human Review)
 
 ## Happy Path
 
@@ -68,6 +68,40 @@ Temporal (IngestionRunWorkflow)
 Done. Client polls GET /runs/{run_id} to observe status and extraction summary.
 ```
 
+## Human Review Flow (Sprint 5)
+
+After extraction completes, a human reviewer can annotate ProcessIR entities and relations
+via the review API and frontend UI.
+
+```
+Reviewer (browser)
+  │
+  │  GET /runs/{run_id}/review
+  │    ← { sessions, entity_reviews, relation_reviews, taxonomy_feedback }
+  │
+  │  GET /runs/{run_id}/process-ir
+  │    ← { process_ir: { workflow_steps, roles, systems, ... } }
+  │
+  │  POST /reviews/entities/{entity_id}
+  │    body: { run_id, entity_type, review_state, edited_label?, confidence_override? }
+  │    → auto-creates review_session if none supplied
+  │    → upserts entity_reviews row (review_state, updated_at)
+  │
+  │  POST /reviews/relations/{relation_id}
+  │    body: { run_id, relation_type, source_entity_id, target_entity_id, review_state }
+  │    → upserts relation_reviews row
+  │
+  │  POST /reviews/taxonomy
+  │    body: { run_id, entity_type, entity_id, feedback_type, proposed_label? }
+  │    → inserts taxonomy_feedback row (append-only)
+  ▼
+Postgres
+  review_sessions   — open → completed | abandoned
+  entity_reviews    — one row per (session, entity_id); upserted on edit
+  relation_reviews  — one row per (session, source, target, type); upserted on edit
+  taxonomy_feedback — append-only suggestions
+```
+
 ## Status Transitions
 
 ```
@@ -79,7 +113,7 @@ uploaded → processing → completed
 
 | Store | What is written | Retention |
 |---|---|---|
-| PostgreSQL | run/source/artifact records, workflow_events, normalized_evidence, extraction_runs, extraction_results | Long-lived metadata |
+| PostgreSQL | run/source/artifact records, workflow_events, normalized_evidence, extraction_runs, extraction_results, review_sessions, entity_reviews, relation_reviews, taxonomy_feedback | Long-lived metadata |
 | MinIO `raw/` | Original uploaded file bytes | `temporary` — deletion-eligible after parsing |
 | MinIO `normalized/` | NormalizedEvidence JSON (metadata only) | `temporary` — deletion-eligible after extraction |
 | MinIO `process_ir/` | ProcessIR JSON (structured process facts) | `durable` — not deletion-eligible |

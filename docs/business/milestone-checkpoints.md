@@ -211,6 +211,82 @@ No raw content is stored or returned at any stage.
 
 ---
 
+---
+
+## Sprint 5 — Human Review Workflow and Frontend
+
+**Goal:** Human experts can review, correct, and annotate extracted ProcessIR entities and
+relations via a minimal web frontend and REST API. Review decisions persist in Postgres
+for auditability and future supervised learning. No raw customer content is stored or returned.
+
+### DATA-005 — Human review tables
+
+- [x] `review_sessions` table exists
+- [x] `entity_reviews` table exists with all review states (accepted/rejected/edited/merged/split/confidence_override)
+- [x] `relation_reviews` table exists
+- [x] `taxonomy_feedback` table exists
+- [x] Unique indexes support upsert semantics for entity and relation reviews
+- [x] Repository helpers support CRUD for all four tables
+- [x] No raw customer content stored in any review table
+
+### API-007 — Review workflow endpoints
+
+- [x] `GET /runs/{run_id}/review` returns all review data for a run
+- [x] `POST /reviews/entities/{entity_id}` — accept / reject / edit an entity
+- [x] `POST /reviews/relations/{relation_id}` — accept / reject / edit a relation
+- [x] `POST /reviews/taxonomy` — submit taxonomy label feedback
+- [x] Invalid review_state or feedback_type returns 422
+- [x] Unknown run_id returns 404
+- [x] Sessions auto-created when review_session_id is not supplied
+
+### UI-001 — Frontend app skeleton
+
+- [x] Next.js 14 app runs locally (`npm run dev`)
+- [x] Frontend container works in Docker Compose
+- [x] Health check screen at `/health`
+- [x] API connectivity via typed client (`lib/api.ts`)
+- [x] `NEXT_PUBLIC_API_URL` configures the API base URL
+- [x] README documents startup instructions
+
+### UI-002 — Upload and run status screen
+
+- [x] User can upload files at `/runs/upload`
+- [x] User can see run status at `/runs/{id}`
+- [x] Extraction completion state visible
+- [x] Sources table shows filename, type, size, status
+- [x] Auto-refresh polling until terminal state
+
+### UI-003 — ProcessIR review screen
+
+- [x] Extracted entities visible grouped by type at `/runs/{id}/review`
+- [x] Confidence/count summary visible
+- [x] Review status badge visible per entity
+- [x] Entity detail fields visible (description, role, system, etc.)
+
+### UI-004 — Entity and relation review controls
+
+- [x] Accept button per entity
+- [x] Reject button per entity
+- [x] Edit form (label, confidence override, reviewer note)
+- [x] Taxonomy feedback form (feedback_type, proposed_label, notes)
+- [x] UI badge updates immediately after each action
+- [x] No raw customer content displayed or submitted
+
+### TEST-005 — Review workflow integration tests
+
+- [x] Review schema validation tests pass (23 tests)
+- [x] Repository helper tests pass (entity/relation/taxonomy)
+- [x] Smoke tests skip gracefully when review endpoints not deployed
+- [x] All 141 existing tests still pass
+
+### DOC-005 — Human review workflow documentation
+
+- [x] ADR-003 documents review lifecycle, states, upsert semantics, and future ML path
+- [x] `docs/architecture/data-flow.md` updated with review flow diagram
+- [x] Sprint 5 milestone checkpoints added
+
+---
+
 ## Definition of Done (per Sprint)
 
 All checkpoints for the sprint pass. The smoke test suite runs green against
