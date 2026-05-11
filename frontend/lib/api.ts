@@ -81,6 +81,81 @@ export interface UploadResponse {
   source_id: string;
 }
 
+// ---------------------------------------------------------------------------
+// Sprint 6: Process exploration types
+// ---------------------------------------------------------------------------
+
+export interface ProcessSummaryResponse {
+  extraction_result_id: string;
+  extraction_run_id: string;
+  run_id: string;
+  extraction_status: string;
+  process_ir_uri: string | null;
+  schema_version: string | null;
+  filename: string | null;
+  created_at: string;
+}
+
+export interface ProcessDetailResponse {
+  extraction_result_id: string;
+  run_id: string;
+  schema_version: string | null;
+  process_ir: Record<string, unknown> | null;
+  confidence_summary: Record<string, number> | null;
+}
+
+export interface TimelineEvent {
+  event_id: string;
+  description: string;
+  category: string;
+  process_id: string;
+  from_value: string | null;
+  to_value: string | null;
+  evidence_count: number;
+}
+
+export interface TimelineResponse {
+  extraction_result_id: string;
+  process_id: string | null;
+  events: TimelineEvent[];
+  summary: Record<string, unknown>;
+}
+
+export interface GraphResponse {
+  extraction_result_id: string;
+  graph: {
+    processId: string;
+    nodes: Array<{
+      id: string;
+      type: string;
+      data: { label: string; [key: string]: unknown };
+      position: { x: number; y: number };
+    }>;
+    edges: Array<{
+      id: string;
+      source: string;
+      target: string;
+      type: string;
+      label?: string;
+      animated?: boolean;
+    }>;
+    metadata: Record<string, unknown>;
+  };
+}
+
+export interface ProcessGroupResponse {
+  cluster_id: string;
+  process_ids: string[];
+  cohesion: number;
+  recommend_merge: boolean;
+  merge_note: string | null;
+}
+
+export interface ProcessGroupsResponse {
+  groups: ProcessGroupResponse[];
+  singleton_count: number;
+}
+
 export interface ReviewSummaryResponse {
   run_id: string;
   sessions: Record<string, unknown>[];
@@ -196,6 +271,38 @@ export const api = {
     }
   ): Promise<ReviewRecordResponse> {
     return post<ReviewRecordResponse>(`/reviews/relations/${relationId}`, body);
+  },
+
+  /** List all process candidates */
+  listProcesses(
+    params: { limit?: number; offset?: number } = {}
+  ): Promise<ProcessSummaryResponse[]> {
+    const qs = new URLSearchParams();
+    if (params.limit !== undefined) qs.set("limit", String(params.limit));
+    if (params.offset !== undefined) qs.set("offset", String(params.offset));
+    const query = qs.toString();
+    return get<ProcessSummaryResponse[]>(`/processes${query ? `?${query}` : ""}`);
+  },
+
+  /** Get a single process by extraction_result_id */
+  getProcess(id: string): Promise<ProcessDetailResponse> {
+    return get<ProcessDetailResponse>(`/processes/${id}`);
+  },
+
+  /** Get the change timeline for a process */
+  getProcessTimeline(id: string): Promise<TimelineResponse> {
+    return get<TimelineResponse>(`/processes/${id}/timeline`);
+  },
+
+  /** Get the React Flow graph for a process */
+  getProcessGraph(id: string): Promise<GraphResponse> {
+    return get<GraphResponse>(`/processes/${id}/graph`);
+  },
+
+  /** Get similarity-based process groups */
+  getProcessGroups(threshold?: number): Promise<ProcessGroupsResponse> {
+    const qs = threshold !== undefined ? `?threshold=${threshold}` : "";
+    return get<ProcessGroupsResponse>(`/processes/groups${qs}`);
   },
 
   /** Submit taxonomy feedback */
