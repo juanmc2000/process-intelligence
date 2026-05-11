@@ -302,6 +302,37 @@ def get_extraction_summary(
         return dict(row) if row else None
 
 
+def get_process_ir_for_run(
+    conn: psycopg2.extensions.connection,
+    run_id: UUID,
+) -> Optional[dict[str, Any]]:
+    """Return ProcessIR metadata for a completed run, or None.
+
+    Returns extraction_result_id, process_ir_uri, schema_version,
+    extraction status, and source_id if available.
+    """
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT res.id AS extraction_result_id,
+                   er.id AS extraction_run_id,
+                   er.status AS extraction_status,
+                   res.process_ir_uri,
+                   res.schema_version,
+                   ne.source_id
+              FROM extraction_runs er
+              LEFT JOIN extraction_results res ON res.extraction_run_id = er.id
+              LEFT JOIN normalized_evidence ne ON ne.id = er.normalized_evidence_id
+             WHERE er.run_id = %s
+             ORDER BY er.created_at DESC
+             LIMIT 1
+            """,
+            (str(run_id),),
+        )
+        row = cur.fetchone()
+        return dict(row) if row else None
+
+
 def get_run(
     conn: psycopg2.extensions.connection,
     run_id: UUID,
