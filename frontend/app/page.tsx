@@ -8,12 +8,18 @@ export default function Home() {
       <p className="text-gray-600 mb-6">
         Upload customer artifacts and review extracted process knowledge.
       </p>
-      <div className="flex gap-3">
+      <div className="flex gap-3 flex-wrap">
         <Link
           href="/runs/upload"
           className="px-4 py-2 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 transition-colors"
         >
           Upload artifact
+        </Link>
+        <Link
+          href="/processes"
+          className="px-4 py-2 bg-purple-600 text-white text-sm rounded hover:bg-purple-700 transition-colors"
+        >
+          Process explorer
         </Link>
         <Link
           href="/health"
