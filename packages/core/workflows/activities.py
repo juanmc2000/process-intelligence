@@ -288,11 +288,11 @@ def _generic_metadata(raw_bytes: bytes, filename: str, content_type: str) -> dic
 
 @activity.defn(name="extract_process_ir")
 async def extract_process_ir(inp: ExtractInput) -> str:
-    """Deterministic ProcessIR extraction stub.
+    """Deterministic ProcessIR extraction.
 
-    Reads normalized evidence artifact metadata and produces a ProcessIR artifact
-    without calling any external LLM. This stub always produces a valid, empty ProcessIR
-    that is schema-conformant and traceable via run_id.
+    Downloads the normalized evidence artifact, extracts text content from
+    the raw artifact, runs the deterministic extraction pipeline, and
+    produces a structured ProcessIR artifact.
 
     Returns the object URI of the ProcessIR artifact.
     """
@@ -302,11 +302,15 @@ async def extract_process_ir(inp: ExtractInput) -> str:
         create_extraction_run,
         update_extraction_run_status,
     )
+    from packages.core.process_ir.converter import extraction_result_to_process_ir
+    from packages.core.process_ir.extractor import extract
     from packages.core.storage.client import make_storage_client
     from packages.core.storage.operations import (
         default_bucket,
+        download_bytes,
         make_object_key,
         object_uri,
+        parse_object_uri,
         upload_bytes,
     )
 
@@ -325,25 +329,32 @@ async def extract_process_ir(inp: ExtractInput) -> str:
             {"extraction_run_id": str(extraction_run_id)},
         )
 
-    # Deterministic stub — no LLM call, produces an empty but valid ProcessIR
-    process_ir_payload = json.dumps(
-        {
-            "id": str(extraction_run_id),
-            "run_id": inp.run_id,
-            "source_artifact_uri": inp.normalized_evidence_uri,
-            "schema_version": _PROCESS_IR_SCHEMA_VERSION,
-            "workflow_steps": [],
-            "decision_points": [],
-            "system_touchpoints": [],
-            "roles": [],
-            "controls": [],
-            "exceptions": [],
-            "change_events": [],
-        }
-    ).encode()
-
     storage = make_storage_client()
     bucket = default_bucket()
+
+    # Download normalized evidence to get raw_artifact_uri for text extraction
+    ne_bucket, ne_key = parse_object_uri(inp.normalized_evidence_uri)
+    ne_bytes = download_bytes(storage, ne_bucket, ne_key)
+    ne_data = json.loads(ne_bytes)
+    raw_artifact_uri = ne_data.get("raw_artifact_uri", inp.normalized_evidence_uri)
+
+    # Download raw artifact and extract text for the deterministic extractor
+    text = _extract_text_from_artifact(storage, raw_artifact_uri, ne_data)
+
+    # Run deterministic extraction on the text
+    extraction_result = extract(text, evidence_id=str(extraction_run_id))
+
+    # Convert to ProcessIR schema
+    process_ir = extraction_result_to_process_ir(
+        extraction_result,
+        run_id=inp.run_id,
+        source_artifact_uri=inp.normalized_evidence_uri,
+        schema_version=_PROCESS_IR_SCHEMA_VERSION,
+        process_ir_id=str(extraction_run_id),
+    )
+
+    process_ir_payload = json.dumps(process_ir.model_dump(mode="json")).encode()
+
     key = make_object_key(
         inp.run_id, str(extraction_run_id), "process_ir.json", "process_ir"
     )
@@ -378,8 +389,80 @@ async def extract_process_ir(inp: ExtractInput) -> str:
             {
                 "extraction_run_id": str(extraction_run_id),
                 "process_ir_uri": process_ir_uri,
+                "entity_count": len(extraction_result.entities),
+                "relation_count": len(extraction_result.relations),
             },
         )
 
-    activity.logger.info("Extraction stub complete for run %s", inp.run_id)
+    activity.logger.info(
+        "Extraction complete for run %s: %d entities, %d relations",
+        inp.run_id,
+        len(extraction_result.entities),
+        len(extraction_result.relations),
+    )
     return process_ir_uri
+
+
+def _extract_text_from_artifact(
+    storage: object, raw_artifact_uri: str, ne_data: dict
+) -> str:
+    """Extract readable text from a raw artifact for deterministic extraction.
+
+    For text-based formats (txt, md, generic), decodes bytes directly.
+    For PDFs, uses pdfplumber if available. For EMLs, extracts body text.
+    Returns empty string if text extraction fails.
+    """
+    from packages.core.storage.operations import download_bytes, parse_object_uri
+
+    try:
+        raw_bucket, raw_key = parse_object_uri(raw_artifact_uri)
+        raw_bytes = download_bytes(storage, raw_bucket, raw_key)
+    except Exception:
+        return ""
+
+    fmt = ne_data.get("format", "generic")
+
+    if fmt == "pdf":
+        return _extract_pdf_text(raw_bytes)
+    elif fmt == "eml":
+        return _extract_eml_text(raw_bytes)
+    else:
+        # txt, md, generic — try UTF-8 decode
+        try:
+            return raw_bytes.decode("utf-8", errors="replace")
+        except Exception:
+            return ""
+
+
+def _extract_pdf_text(raw_bytes: bytes) -> str:
+    """Extract text from PDF bytes using pdfplumber."""
+    try:
+        import io
+
+        import pdfplumber
+
+        pages_text: list[str] = []
+        with pdfplumber.open(io.BytesIO(raw_bytes)) as pdf:
+            for page in pdf.pages:
+                text = page.extract_text()
+                if text:
+                    pages_text.append(text)
+        return "\n".join(pages_text)
+    except Exception:
+        # pdfplumber not available or PDF unreadable
+        return ""
+
+
+def _extract_eml_text(raw_bytes: bytes) -> str:
+    """Extract body text from EML bytes."""
+    import email
+    import email.policy
+
+    try:
+        msg = email.message_from_bytes(raw_bytes, policy=email.policy.default)
+        body = msg.get_body(preferencelist=("plain",))
+        if body:
+            return body.get_content()
+        return ""
+    except Exception:
+        return ""
