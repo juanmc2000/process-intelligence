@@ -164,7 +164,7 @@ _CHANGE_PATTERNS = [
         "changed_from_to",
         ActionClass.CHANGE_MADE,
         re.compile(
-            r"\b(?:changed|updated|migrated|reassigned|moved)\s+from\s+(?P<old_value>[^.;,]{1,60}?)\s+to\s+(?P<new_value>[^.;,]{1,60})",
+            r"\b(?:changed|updated|migrated|reassigned|moved)\s+from\s+(?P<old_value>[^.;]{1,60}?)\s+to\s+(?P<new_value>[^.;]{1,60})",
             re.IGNORECASE,
         ),
         0.90,
