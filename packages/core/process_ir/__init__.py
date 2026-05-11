@@ -1,4 +1,15 @@
 from packages.core.process_ir.extractor import extract
+from packages.core.process_ir.lineage import (
+    ChangeCategory,
+    LineageChain,
+    ProcessVersion,
+    TimelineEvent,
+    aggregate_changes,
+    build_lineage_chain,
+    build_timeline,
+    build_timeline_summary,
+    detect_superseded,
+)
 from packages.core.process_ir.similarity import (
     AliasGroup,
     DimensionScore,
@@ -57,6 +68,16 @@ __all__ = [
     "ActionClass",
     "ControlType",
     "ExtractionMethod",
+    # Lineage types
+    "ChangeCategory",
+    "TimelineEvent",
+    "ProcessVersion",
+    "LineageChain",
+    "build_timeline",
+    "build_lineage_chain",
+    "aggregate_changes",
+    "detect_superseded",
+    "build_timeline_summary",
     # Similarity types
     "ProcessFingerprint",
     "SimilarityScore",
