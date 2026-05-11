@@ -26,6 +26,12 @@ export default function RootLayout({
             Runs
           </Link>
           <Link
+            href="/runs/upload"
+            className="text-sm text-gray-600 hover:text-gray-900 transition-colors"
+          >
+            Upload
+          </Link>
+          <Link
             href="/health"
             className="text-sm text-gray-600 hover:text-gray-900 transition-colors"
           >
