@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import { api, ProcessDetailResponse } from "@/lib/api";
+import { api, ProcessDetailResponse, RunDetailResponse, SourceResponse } from "@/lib/api";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -164,6 +164,201 @@ function deriveConfidenceScore(summary: Record<string, number> | null): number {
 }
 
 // ---------------------------------------------------------------------------
+// Sources tab helpers
+// ---------------------------------------------------------------------------
+
+function formatBytes(bytes: number | null): string {
+  if (!bytes) return "—";
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function formatDate(iso: string): string {
+  try {
+    return new Date(iso).toLocaleDateString(undefined, {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+    });
+  } catch {
+    return iso;
+  }
+}
+
+function sourceTypeBadge(contentType: string | null): string {
+  if (!contentType) return "Unknown";
+  if (contentType.includes("pdf")) return "PDF";
+  if (contentType.includes("email") || contentType.includes("message/rfc")) return "Email";
+  if (contentType.includes("zip")) return "ZIP";
+  if (contentType.includes("word") || contentType.includes("docx")) return "DOCX";
+  if (contentType.includes("csv")) return "CSV";
+  if (contentType.includes("plain")) return "Text";
+  if (contentType.includes("image")) return "Image";
+  const ext = contentType.split("/").pop()?.toUpperCase() ?? "File";
+  return ext;
+}
+
+function SourceCard({ source }: { source: SourceResponse }) {
+  const typeLabel = sourceTypeBadge(source.content_type);
+  const statusColor =
+    source.status === "parsed" || source.status === "completed"
+      ? "text-emerald-600 bg-emerald-50 border-emerald-200"
+      : source.status === "failed"
+      ? "text-red-600 bg-red-50 border-red-200"
+      : "text-[var(--text-muted)] bg-[var(--surface-soft)] border-[var(--border-soft)]";
+
+  return (
+    <div className="card p-4 flex flex-col gap-2.5">
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex items-center gap-2 min-w-0">
+          <span
+            className="px-2 py-0.5 rounded text-[11px] font-semibold border shrink-0"
+            style={{ color: "var(--accent)", background: "var(--accent-soft)", borderColor: "var(--accent-soft)" }}
+          >
+            {typeLabel}
+          </span>
+          <span className="text-[13px] font-medium text-[var(--text-primary)] truncate">
+            {source.filename || "Untitled source"}
+          </span>
+        </div>
+        <span className={`text-[10px] font-medium px-2 py-0.5 rounded border shrink-0 ${statusColor}`}>
+          {source.status}
+        </span>
+      </div>
+
+      <div className="flex items-center gap-4 text-[11px] text-[var(--text-muted)]">
+        <span>{formatBytes(source.size_bytes)}</span>
+        <span>Ingested {formatDate(source.created_at)}</span>
+      </div>
+
+      {source.input_hash && (
+        <div className="text-[10px] text-[var(--text-muted)] font-mono truncate">
+          Hash: {source.input_hash.slice(0, 16)}…
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SourcesTab({ runDetail, loadingRun }: { runDetail: RunDetailResponse | null; loadingRun: boolean }) {
+  if (loadingRun) {
+    return (
+      <div className="flex items-center justify-center h-40 text-[var(--text-muted)] text-[13px]">
+        Loading sources…
+      </div>
+    );
+  }
+
+  if (!runDetail) {
+    return (
+      <div className="flex items-center justify-center h-40 text-[var(--text-muted)] text-[13px] italic">
+        Source data not available.
+      </div>
+    );
+  }
+
+  const { sources, artifacts } = runDetail;
+
+  // Group artifacts by source id for provenance chips
+  const artifactsBySourceId = new Map<string, string[]>();
+  for (const a of artifacts) {
+    // artifact object_uri encodes source; we show artifact_type as provenance
+    const sid = "run"; // artifacts are run-level in current schema
+    if (!artifactsBySourceId.has(sid)) artifactsBySourceId.set(sid, []);
+    const types = artifactsBySourceId.get(sid)!;
+    if (!types.includes(a.artifact_type)) types.push(a.artifact_type);
+  }
+
+  const artifactTypes = [...new Set(artifacts.map((a) => a.artifact_type))];
+
+  return (
+    <div className="px-8 py-8 max-w-4xl space-y-6">
+      {/* Summary row */}
+      <div className="flex items-center gap-6 text-[13px] text-[var(--text-secondary)]">
+        <span>
+          <strong className="text-[var(--text-primary)]">{sources.length}</strong> source file{sources.length !== 1 ? "s" : ""}
+        </span>
+        <span>
+          <strong className="text-[var(--text-primary)]">{artifacts.length}</strong> artifact{artifacts.length !== 1 ? "s" : ""}
+        </span>
+      </div>
+
+      {/* Provenance chips */}
+      {artifactTypes.length > 0 && (
+        <div>
+          <h3 className="text-[12px] font-semibold text-[var(--text-muted)] uppercase tracking-wide mb-2">
+            Extraction provenance
+          </h3>
+          <div className="flex flex-wrap gap-2">
+            {artifactTypes.map((t) => (
+              <span
+                key={t}
+                className="px-2.5 py-1 text-[11px] font-medium rounded-full border"
+                style={{ color: "var(--text-secondary)", borderColor: "var(--border-strong)", background: "var(--surface-soft)" }}
+              >
+                {t.replace(/_/g, " ")}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Source cards */}
+      {sources.length === 0 ? (
+        <div className="card p-6 text-center text-[13px] text-[var(--text-muted)] italic">
+          No source files recorded for this run.
+        </div>
+      ) : (
+        <div>
+          <h3 className="text-[12px] font-semibold text-[var(--text-muted)] uppercase tracking-wide mb-3">
+            Source files
+          </h3>
+          <div className="space-y-3">
+            {sources.map((s) => (
+              <SourceCard key={s.id} source={s} />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Artifact metadata */}
+      {artifacts.length > 0 && (
+        <div>
+          <h3 className="text-[12px] font-semibold text-[var(--text-muted)] uppercase tracking-wide mb-3">
+            Extraction artifacts
+          </h3>
+          <div className="space-y-2">
+            {artifacts.map((a) => (
+              <div key={a.id} className="card p-3 flex items-center justify-between gap-4">
+                <div className="flex items-center gap-3 min-w-0">
+                  <span
+                    className="px-2 py-0.5 rounded text-[11px] font-semibold border shrink-0"
+                    style={{ color: "var(--text-secondary)", borderColor: "var(--border-strong)", background: "var(--surface-soft)" }}
+                  >
+                    {a.artifact_type.replace(/_/g, " ")}
+                  </span>
+                  <span className="text-[12px] text-[var(--text-muted)] truncate">
+                    {formatBytes(a.size_bytes)} · {formatDate(a.created_at)}
+                  </span>
+                </div>
+                <span className={`text-[10px] font-medium px-2 py-0.5 rounded border shrink-0 ${a.deletion_eligible ? "text-amber-600 bg-amber-50 border-amber-200" : "text-emerald-600 bg-emerald-50 border-emerald-200"}`}>
+                  {a.deletion_eligible ? "Temporary" : "Durable"}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <p className="text-[11px] text-[var(--text-muted)] italic">
+        Source metadata only — no raw document content is stored or displayed.
+      </p>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Tabs
 // ---------------------------------------------------------------------------
 
@@ -186,13 +381,25 @@ export default function WorkflowNarrativePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<ProcessDetailResponse | null>(null);
+  const [runDetail, setRunDetail] = useState<RunDetailResponse | null>(null);
+  const [loadingRun, setLoadingRun] = useState(false);
   const [tab, setTab] = useState<Tab>("narrative");
 
   useEffect(() => {
     if (!id) return;
     let cancelled = false;
     api.getProcess(id).then((d) => {
-      if (!cancelled) { setData(d); setLoading(false); }
+      if (!cancelled) {
+        setData(d);
+        setLoading(false);
+        // Fetch run detail for Sources tab
+        setLoadingRun(true);
+        api.getRun(d.run_id).then((r) => {
+          if (!cancelled) { setRunDetail(r); setLoadingRun(false); }
+        }).catch(() => {
+          if (!cancelled) setLoadingRun(false);
+        });
+      }
     }).catch((e) => {
       if (!cancelled) { setError(e instanceof Error ? e.message : "Failed to load"); setLoading(false); }
     });
@@ -465,8 +672,12 @@ export default function WorkflowNarrativePage() {
           </div>
         )}
 
-        {(tab === "sources" || tab === "insights" || tab === "activity") && (
-          <div className="flex items-center justify-center h-full text-[var(--text-muted)] text-[14px]">
+        {tab === "sources" && (
+          <SourcesTab runDetail={runDetail} loadingRun={loadingRun} />
+        )}
+
+        {(tab === "insights" || tab === "activity") && (
+          <div className="flex items-center justify-center h-full text-[var(--text-muted)] text-[14px] italic">
             {tab.charAt(0).toUpperCase() + tab.slice(1)} — coming soon
           </div>
         )}
