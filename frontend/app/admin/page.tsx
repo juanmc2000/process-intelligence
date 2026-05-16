@@ -31,39 +31,33 @@ interface AuditLog {
 // ---------------------------------------------------------------------------
 
 const STAT_CARDS: StatCard[] = [
-  { label: "SSO Status", value: "Active", sub: "Okta", status: "active" },
-  { label: "Users", value: "128", sub: "Active users", status: "neutral" },
-  { label: "Data Ingestion", value: "7", sub: "Sources connected", status: "neutral" },
-  { label: "Anonymization", value: "Active", sub: "PII masking enabled", status: "active" },
-  { label: "Retention Policy", value: "90 days", sub: "Time to auto-delete", status: "neutral" },
-  { label: "Audit Events (24h)", value: "342", sub: "", action: "View logs", status: "neutral" },
+  { label: "SSO Status", value: "—", sub: "Not connected", status: "neutral" },
+  { label: "Users", value: "—", sub: "Not available", status: "neutral" },
+  { label: "Data Ingestion", value: "—", sub: "Not connected", status: "neutral" },
+  { label: "Anonymization", value: "—", sub: "Not configured", status: "neutral" },
+  { label: "Retention Policy", value: "—", sub: "Not configured", status: "neutral" },
+  { label: "Audit Events (24h)", value: "—", sub: "No data", status: "neutral" },
 ];
 
 const INTEGRATIONS: Integration[] = [
-  { name: "SharePoint", icon: "🔷", status: "Connected", lastSync: "5m ago" },
-  { name: "Slack", icon: "💬", status: "Connected", lastSync: "1m ago" },
-  { name: "Microsoft Teams", icon: "🟦", status: "Connected", lastSync: "1m ago" },
-  { name: "Email (Exchange)", icon: "📧", status: "Connected", lastSync: "3m ago" },
-  { name: "S3 Storage", icon: "🟠", status: "Connected", lastSync: "10m ago" },
-  { name: "Splunk SEM", icon: "🔴", status: "Connected", lastSync: "1m ago" },
-  { name: "Jira", icon: "🔵", status: "Connected", lastSync: "6m ago" },
+  { name: "SharePoint", icon: "🔷", status: "Disconnected", lastSync: "—" },
+  { name: "Slack", icon: "💬", status: "Disconnected", lastSync: "—" },
+  { name: "Microsoft Teams", icon: "🟦", status: "Disconnected", lastSync: "—" },
+  { name: "Email (Exchange)", icon: "📧", status: "Disconnected", lastSync: "—" },
+  { name: "S3 Storage", icon: "🟠", status: "Disconnected", lastSync: "—" },
+  { name: "Splunk SEM", icon: "🔴", status: "Disconnected", lastSync: "—" },
+  { name: "Jira", icon: "🔵", status: "Disconnected", lastSync: "—" },
 ];
 
 const SECURITY_POSTURE = [
-  "RBAC enforced",
-  "All admin actions audited",
-  "MFA required for admins",
-  "Data at rest encrypted",
-  "Data in transit encrypted",
+  "RBAC enforced (planned)",
+  "Admin action auditing (planned)",
+  "MFA required for admins (planned)",
+  "Data at rest encrypted (planned)",
+  "Data in transit encrypted (planned)",
 ];
 
-const AUDIT_LOGS: AuditLog[] = [
-  { event: "Admin login", user: "michael.chen", when: "2m ago" },
-  { event: "Role updated", user: "michael.chen", when: "10m ago" },
-  { event: "Retention policy changed", user: "system", when: "1h ago" },
-  { event: "Source connected", user: "sarah.johnson", when: "2h ago" },
-  { event: "Anonymization rules updated", user: "michael.chen", when: "3h ago" },
-];
+const AUDIT_LOGS: AuditLog[] = [];
 
 // ---------------------------------------------------------------------------
 // Stat card
@@ -105,12 +99,25 @@ function StatCard({ card }: { card: StatCard }) {
 // ---------------------------------------------------------------------------
 
 function IntegrationRow({ item }: { item: Integration }) {
+  const statusColor =
+    item.status === "Connected"
+      ? "text-emerald-600"
+      : item.status === "Error"
+      ? "text-red-500"
+      : "text-[var(--text-muted)]";
+  const dotColor =
+    item.status === "Connected"
+      ? "bg-emerald-500"
+      : item.status === "Error"
+      ? "bg-red-500"
+      : "bg-[var(--text-muted)]";
+
   return (
     <div className="flex items-center gap-3 py-2.5 border-b border-[var(--border-soft)] last:border-0">
       <span className="text-lg w-7 text-center">{item.icon}</span>
       <span className="flex-1 text-[13px] font-medium text-[var(--text-primary)]">{item.name}</span>
-      <span className="flex items-center gap-1.5 text-[12px] text-emerald-600">
-        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+      <span className={`flex items-center gap-1.5 text-[12px] ${statusColor}`}>
+        <span className={`w-1.5 h-1.5 rounded-full ${dotColor}`} />
         {item.status}
       </span>
       <span className="text-[11px] text-[var(--text-muted)] w-16 text-right">{item.lastSync}</span>
@@ -161,6 +168,12 @@ export default function AdminOverviewPage() {
 
       {/* Content */}
       <div className="flex-1 overflow-y-auto px-8 py-8 space-y-8">
+        {/* Placeholder notice */}
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-[13px] text-amber-800">
+          <span className="font-semibold">Admin portal not yet connected.</span>{" "}
+          Values below reflect the planned governance structure. Real data will appear once admin APIs are integrated.
+        </div>
+
         {/* Stat cards */}
         <div className="grid grid-cols-3 xl:grid-cols-6 gap-4">
           {STAT_CARDS.map((card) => (
@@ -184,8 +197,8 @@ export default function AdminOverviewPage() {
                 <IntegrationRow key={item.name} item={item} />
               ))}
             </div>
-            <button className="mt-4 text-[12px] font-medium text-accent hover:text-accent-hover transition-colors">
-              Manage integrations →
+            <button disabled className="mt-4 text-[12px] font-medium text-[var(--text-muted)] cursor-not-allowed" title="Coming soon">
+              Manage integrations (coming soon)
             </button>
           </div>
 
@@ -224,13 +237,19 @@ export default function AdminOverviewPage() {
               <h2 className="text-[15px] font-semibold text-[var(--text-primary)] mb-3">
                 Recent audit logs
               </h2>
-              <div>
-                {AUDIT_LOGS.map((log) => (
-                  <AuditRow key={log.event + log.when} log={log} />
-                ))}
-              </div>
-              <button className="mt-4 text-[12px] font-medium text-accent hover:text-accent-hover transition-colors">
-                View all audit logs →
+              {AUDIT_LOGS.length === 0 ? (
+                <p className="text-[13px] text-[var(--text-muted)] italic py-2">
+                  No audit data available — audit pipeline not yet connected.
+                </p>
+              ) : (
+                <div>
+                  {AUDIT_LOGS.map((log) => (
+                    <AuditRow key={log.event + log.when} log={log} />
+                  ))}
+                </div>
+              )}
+              <button disabled className="mt-4 text-[12px] font-medium text-[var(--text-muted)] cursor-not-allowed" title="Coming soon">
+                View all audit logs (coming soon)
               </button>
             </div>
           </div>
