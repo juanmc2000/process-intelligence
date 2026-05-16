@@ -130,7 +130,7 @@ const NAV_ITEMS: NavItem[] = [
   { label: "Review Queue", href: "/review", icon: <IconClipboard /> },
   { label: "Exports", href: "/exports", icon: <IconFileOutput /> },
   { label: "Insights", href: "/insights", icon: <IconBarChart /> },
-  { label: "Settings", href: "/settings", icon: <IconSettings /> },
+  { label: "Settings", href: "/admin", icon: <IconSettings /> },
 ];
 
 function NavLink({ item, pathname }: { item: NavItem; pathname: string }) {
