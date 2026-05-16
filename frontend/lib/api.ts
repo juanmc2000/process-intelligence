@@ -214,7 +214,7 @@ export const api = {
   /** Upload a file and start a processing run */
   async upload(file: File): Promise<UploadResponse> {
     const form = new FormData();
-    form.append("file", file);
+    form.append("files", file);
     const res = await fetch(`${API_BASE}/upload`, {
       method: "POST",
       body: form,
