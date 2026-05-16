@@ -1,6 +1,6 @@
 # UI Current State
 
-Last updated: Sprint 7
+Last updated: Sprint 8A
 
 This document describes the current implementation state of the frontend UI: which
 pages use real API data, which sections are static or placeholder, and what the
@@ -28,7 +28,7 @@ known limitations are.
 | `/runs/[id]` | Wired | Yes | Polls `GET /runs/{id}` until terminal state |
 | `/runs/[id]/review` | Wired | Yes | `GET /runs/{id}/review`; review actions via POST endpoints |
 | `/processes` | Wired | Yes | `GET /processes` + `GET /processes/groups` |
-| `/processes/[id]` | Wired | Yes | `GET /processes/{id}` — Narrative and Sources tabs real; Insights/Activity coming soon |
+| `/processes/[id]` | Wired | Yes | `GET /processes/{id}` — Narrative, Sources, and Explanations tabs real; Insights/Activity coming soon |
 | `/processes/[id]/graph` | Wired | Yes | `GET /processes/{id}/graph` + `GET /processes/{id}` for confidence |
 | `/processes/[id]/timeline` | Wired | Yes | `GET /processes/{id}/timeline` |
 | `/admin` | Placeholder | No | Static shell; real data requires admin API integration |
@@ -54,13 +54,18 @@ known limitations are.
 
 ### Process exploration (`/processes`)
 - Full process list with filter
-- Similarity groups panel from `GET /processes/groups`
-- Links to narrative, graph, timeline per process
+- **Review queue summary panel**: counts by category (Needs review / Processing / Failed / Pending)
+- **Category filter tabs**: filter process list by review status
+- **Per-process review category badge** alongside extraction status
+- Process list sorted by review priority (needs_review first)
+- Enhanced similarity groups panel with cohesion display and merge candidate badges
+- Links to narrative, graph, timeline, explanations, and review per process
 
 ### Workflow narrative (`/processes/[id]`)
 - **Narrative tab:** Summary, key findings, and at-a-glance stats derived from ProcessIR
 - **Confidence ring:** Score derived from `confidence_summary` population ratio
 - **Sources tab:** Run metadata — source files (filename, type, size, date, status) and extraction artifacts (type, size, retention class)
+- **Explanations tab:** Confidence decomposition (per-dimension breakdown), evidence lineage summary (coverage ratio, well-evidenced labels), per-entity explanations with confidence tier badges; accessible via `?tab=explanations` URL param
 - **Workflow tab:** Redirects to graph view
 - **Insights / Activity tabs:** Marked "coming soon"
 
@@ -69,6 +74,7 @@ known limitations are.
 - Layer toggles (Departments, Systems, Approvals, Exceptions, Controls, Roles) **functional** — filter nodes and edges by type
 - Confidence panel shows real score from `GET /processes/{id}` confidence_summary
 - Confidence breakdown per dimension (steps, roles, systems, controls, etc.)
+- **Edge reasoning panel**: fetches `GET /processes/{id}/graph/explanations` and displays per-edge basis and rationale
 - MiniMap and zoom/pan controls operational
 
 ### Process timeline (`/processes/[id]/timeline`)
@@ -127,6 +133,9 @@ live governance systems. The API contracts are defined in `services/api/app/rout
 | `GET /processes/{id}` | Narrative page, graph confidence |
 | `GET /processes/{id}/graph` | Graph page |
 | `GET /processes/{id}/timeline` | Timeline page |
+| `GET /processes/{id}/explanations` | Explanations tab (confidence, lineage, entities) |
+| `GET /processes/{id}/graph/explanations` | Graph page edge reasoning panel |
+| `GET /processes/{id}/similarity-explanations` | Similarity explanations (not yet wired to UI) |
 | `GET /admin/*` | Admin portal (stubs — not yet wired to UI) |
 
 ---
