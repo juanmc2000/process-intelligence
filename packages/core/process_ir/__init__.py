@@ -1,3 +1,17 @@
+from packages.core.process_ir.explainability import (
+    ConfidenceDecomposition,
+    ConfidenceDimension,
+    DimensionExplanation,
+    EdgeExplanation,
+    EntityExplanation,
+    EvidenceLineageSummary,
+    ProcessExplanation,
+    SimilarityExplanation,
+    decompose_confidence,
+    explain_process,
+    explain_similarity,
+    summarise_evidence_lineage,
+)
 from packages.core.process_ir.extractor import extract
 from packages.core.process_ir.graph import (
     GraphEdge,
@@ -99,4 +113,17 @@ __all__ = [
     "score_similarity",
     "detect_aliases",
     "cluster_processes",
+    # Explainability
+    "EntityExplanation",
+    "EdgeExplanation",
+    "ConfidenceDimension",
+    "ConfidenceDecomposition",
+    "EvidenceLineageSummary",
+    "DimensionExplanation",
+    "SimilarityExplanation",
+    "ProcessExplanation",
+    "explain_process",
+    "explain_similarity",
+    "decompose_confidence",
+    "summarise_evidence_lineage",
 ]
