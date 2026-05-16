@@ -372,6 +372,79 @@ for auditability and future supervised learning. No raw customer content is stor
 
 ---
 
+---
+
+## Sprint 7 — UI Polish, Evidence Provenance, and Admin API Stubs
+
+**Goal:** Improve UI trust and operational clarity by clearly marking placeholder states,
+wiring real confidence data and layer filtering on the graph page, adding a sources/evidence
+tab to the workflow narrative, and defining admin API contracts for future governance.
+
+### UI-013 — Mark placeholder UI states clearly
+
+- [x] Hardcoded random confidence scores removed from home workflow cards
+- [x] Static recent activity feed labelled "Demo data"
+- [x] "Choose source" button disabled with "Coming soon" state
+- [x] Admin portal shows amber placeholder banner
+- [x] Admin integrations shown as "Disconnected" (not fake "Connected")
+- [x] Admin audit log shows empty state instead of fake entries
+- [x] Admin security posture labelled as "Planned"
+- [x] AI Suggestions panel in graph page marked "Coming soon"
+- [x] Non-Canvas tabs in graph page visually disabled
+- [x] Share / Export / Review & Publish buttons disabled across graph and narrative pages
+- [x] Hardcoded source tags (SOPs, Email, Forms) removed from narrative page
+- [x] Hardcoded owner/status metadata removed from narrative page
+
+### UI-015 — Add real confidence display to graph page
+
+- [x] Hardcoded `confidenceScore = 84` removed
+- [x] Process detail fetched alongside graph to obtain `confidence_summary`
+- [x] Confidence score derived from population ratio (same formula as narrative page)
+- [x] High / Medium / Low label displayed with ring
+- [x] Per-dimension breakdown table visible in right panel
+- [x] Graceful fallback when confidence_summary is absent
+
+### UI-014 — Wire workflow graph layer toggles
+
+- [x] LayerKey expanded to 6 layers: Departments, Systems, Approvals, Exceptions, Controls, Roles
+- [x] NODE_TYPE_LAYER mapping defined for all node types
+- [x] Layer toggles filter nodes by type
+- [x] Edge filtering hides edges where either endpoint is in a hidden layer
+- [x] Zoom/pan state preserved during filtering
+- [x] All 6 checkboxes visible in left panel
+
+### UI-016 — Add Sources/Evidence tab foundations
+
+- [x] Sources tab fetches `RunDetailResponse` for metadata
+- [x] Source file cards: filename, type badge, size, ingestion date, status
+- [x] Extraction artifact rows: type, size, date, Temporary/Durable retention badge
+- [x] Provenance chips show artifact types
+- [x] Empty state when no sources exist
+- [x] No raw document content or MinIO URIs exposed
+- [x] Insights/Activity tabs retain "coming soon" label
+
+### ADMIN-001 — Define admin/security API contract stubs
+
+- [x] `GET /admin/integrations` — all integrations listed as disconnected
+- [x] `GET /admin/ingestion` — placeholder ingestion health
+- [x] `GET /admin/retention` — artifact retention rules from ADR-001
+- [x] `GET /admin/anonymization` — PII masking placeholder
+- [x] `GET /admin/audit` — audit summary placeholder (empty)
+- [x] `GET /admin/security` — security posture with planned controls
+- [x] Pydantic schemas in `packages/core/schemas/admin.py`
+- [x] All responses include `note` field distinguishing placeholder from production
+
+### DOC-008 — Update UI current-state documentation
+
+- [x] `docs/architecture/ui-state.md` created with full route inventory
+- [x] Wired vs placeholder functionality documented per page
+- [x] API-to-UI mapping table documented
+- [x] Known limitations listed
+- [x] `docs/architecture/system-overview.md` updated with frontend info and API route table
+- [x] Sprint 7 milestone checkpoints added
+
+---
+
 ## Definition of Done (per Sprint)
 
 All checkpoints for the sprint pass. The smoke test suite runs green against

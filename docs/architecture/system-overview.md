@@ -56,11 +56,35 @@ tests/
 
 See `docs/architecture/data-flow.md` for full format behaviour and limits.
 
+## Frontend
+
+| Item | Value |
+|---|---|
+| Framework | Next.js 14, TypeScript, Tailwind CSS |
+| Graph | React Flow |
+| Docker port | 3000 |
+| API client | `frontend/lib/api.ts` |
+| Base URL env var | `NEXT_PUBLIC_API_URL` (default: `http://localhost:8010`) |
+
+See `docs/architecture/ui-state.md` for full route inventory and placeholder status.
+
+## API Routes
+
+| Prefix | Module | Purpose |
+|---|---|---|
+| `/upload` | `routes/upload.py` | Multi-file ingestion |
+| `/runs` | `routes/runs.py` | Run status, ProcessIR, review |
+| `/reviews` | `routes/review.py` | Entity/relation/taxonomy review actions |
+| `/processes` | `routes/processes.py` | Process exploration, graph, timeline |
+| `/admin` | `routes/admin.py` | Admin/security governance stubs |
+| `/health`, `/ready` | `main.py` | Health and readiness endpoints |
+
 ## Ports (local)
 
 | Service | Port |
 |---|---|
 | API | 8010 |
+| Frontend | 3000 |
 | PostgreSQL | 5442 |
 | MinIO API | 9010 |
 | MinIO Console | 9011 |
