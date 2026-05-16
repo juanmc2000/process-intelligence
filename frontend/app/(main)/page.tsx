@@ -78,31 +78,11 @@ function IconHelp() {
 }
 
 // ---------------------------------------------------------------------------
-// Confidence badge
-// ---------------------------------------------------------------------------
-
-function ConfidenceBadge({ score }: { score: number }) {
-  const color =
-    score >= 75
-      ? { text: "text-emerald-600", label: "High confidence" }
-      : score >= 50
-      ? { text: "text-amber-500", label: "Medium confidence" }
-      : { text: "text-red-500", label: "Low confidence" };
-  return (
-    <div className="text-right">
-      <div className={`text-base font-bold ${color.text}`}>{score}%</div>
-      <div className={`text-[10px] font-medium ${color.text}`}>{color.label}</div>
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
 // Workflow card
 // ---------------------------------------------------------------------------
 
 function WorkflowCard({ process }: { process: ProcessSummaryResponse }) {
   const name = process.filename ?? "Untitled workflow";
-  const confidence = Math.floor(Math.random() * 35) + 60; // placeholder until API returns score
   const id = process.extraction_result_id;
 
   return (
@@ -111,13 +91,15 @@ function WorkflowCard({ process }: { process: ProcessSummaryResponse }) {
         <span className="text-[14px] font-semibold text-[var(--text-primary)] leading-snug line-clamp-2">
           {name}
         </span>
-        <ConfidenceBadge score={confidence} />
+        <span className="text-[10px] text-[var(--text-muted)] italic shrink-0 mt-0.5">
+          No score yet
+        </span>
       </div>
 
       <div className="flex items-center gap-1.5 text-[11px] text-[var(--text-muted)]">
         <span className="flex items-center gap-1">
           <IconLayers />
-          Operations
+          <span className="italic">Uncategorised</span>
         </span>
       </div>
 
@@ -128,9 +110,9 @@ function WorkflowCard({ process }: { process: ProcessSummaryResponse }) {
         >
           Review narrative
         </Link>
-        <div className="flex items-center gap-1 text-[11px] text-[var(--text-muted)]">
+        <div className="flex items-center gap-1 text-[11px] text-[var(--text-muted)] italic">
           <IconClock />
-          <span>Recently updated</span>
+          <span>Date not available</span>
         </div>
       </div>
     </div>
@@ -242,7 +224,7 @@ export default function Home() {
           </div>
 
           {/* Connect source card */}
-          <div className="card p-6 flex-1 flex flex-col items-center text-center gap-4 min-w-0">
+          <div className="card p-6 flex-1 flex flex-col items-center text-center gap-4 min-w-0 opacity-60">
             <div className="text-[var(--text-secondary)]">
               <IconConnect />
             </div>
@@ -256,9 +238,11 @@ export default function Home() {
               </div>
             </div>
             <button
-              className="mt-auto inline-flex items-center justify-center px-5 py-2 rounded-btn text-[13px] font-semibold border border-[var(--border-strong)] text-[var(--text-primary)] hover:bg-[var(--surface-muted)] transition-colors"
+              disabled
+              title="Coming soon"
+              className="mt-auto inline-flex items-center justify-center px-5 py-2 rounded-btn text-[13px] font-semibold border border-[var(--border-soft)] text-[var(--text-muted)] cursor-not-allowed"
             >
-              Choose source
+              Coming soon
             </button>
           </div>
 
@@ -266,6 +250,7 @@ export default function Home() {
           <div className="card p-5 w-64 shrink-0 flex flex-col">
             <div className="flex items-center justify-between mb-1">
               <h2 className="text-[13px] font-semibold text-[var(--text-primary)]">Recent activity</h2>
+              <span className="text-[10px] text-[var(--text-muted)] italic">Demo data</span>
             </div>
             <div className="divide-y divide-[var(--border-soft)] flex-1">
               {recentActivity.map((a) => (

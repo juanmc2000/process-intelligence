@@ -254,15 +254,15 @@ export default function SpatialWorkflowPage() {
             </span>
           </div>
           <div className="flex items-center gap-2 shrink-0">
-            <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-btn text-[12px] font-medium text-white/50 hover:text-white hover:bg-white/5 border border-white/10 transition-colors">
+            <button disabled title="Coming soon" className="flex items-center gap-1.5 px-3 py-1.5 rounded-btn text-[12px] font-medium text-white/25 border border-white/8 cursor-not-allowed">
               <IconShare />
               Share
             </button>
-            <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-btn text-[12px] font-medium text-white/50 hover:text-white hover:bg-white/5 border border-white/10 transition-colors">
+            <button disabled title="Coming soon" className="flex items-center gap-1.5 px-3 py-1.5 rounded-btn text-[12px] font-medium text-white/25 border border-white/8 cursor-not-allowed">
               Export
               <IconChevronDown />
             </button>
-            <button className="flex items-center gap-1.5 px-4 py-1.5 rounded-btn text-[12px] font-semibold text-white transition-colors" style={{ background: "var(--accent)" }}>
+            <button disabled title="Coming soon" className="flex items-center gap-1.5 px-4 py-1.5 rounded-btn text-[12px] font-semibold text-white/30 cursor-not-allowed" style={{ background: "rgba(99,102,241,0.3)" }}>
               Review &amp; Publish
             </button>
           </div>
@@ -270,19 +270,25 @@ export default function SpatialWorkflowPage() {
 
         {/* Tab strip */}
         <div className="flex items-end gap-1">
-          {["Overview", "Canvas", "Details", "Insights", "Sources"].map((t) => (
-            <button
-              key={t}
-              className={[
-                "px-4 py-2 text-[13px] font-medium border-b-2 transition-colors",
-                t === "Canvas"
-                  ? "border-white text-white"
-                  : "border-transparent text-white/40 hover:text-white/60",
-              ].join(" ")}
-            >
-              {t}
-            </button>
-          ))}
+          {["Overview", "Canvas", "Details", "Insights", "Sources"].map((t) => {
+            const isActive = t === "Canvas";
+            const isComingSoon = !isActive;
+            return (
+              <button
+                key={t}
+                disabled={isComingSoon}
+                title={isComingSoon ? "Coming soon" : undefined}
+                className={[
+                  "px-4 py-2 text-[13px] font-medium border-b-2 transition-colors",
+                  isActive
+                    ? "border-white text-white"
+                    : "border-transparent text-white/25 cursor-not-allowed",
+                ].join(" ")}
+              >
+                {t}
+              </button>
+            );
+          })}
         </div>
       </div>
 
@@ -394,33 +400,17 @@ export default function SpatialWorkflowPage() {
         >
           {/* AI Suggestions */}
           <div className="p-4 border-b border-white/5">
-            <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center justify-between mb-1">
               <h3 className="text-[13px] font-semibold text-white">AI Suggestions</h3>
-              <button className="text-white/30 hover:text-white/60 text-[10px]">···</button>
+              <span className="text-[10px] text-white/30 italic">Coming soon</span>
             </div>
-            <p className="text-[11px] text-white/35 mb-3">{AI_SUGGESTIONS.length} suggestions</p>
-            <div className="space-y-3">
-              {AI_SUGGESTIONS.map((s) => (
-                <div key={s.title} className="flex items-start gap-2">
-                  <div
-                    className="w-6 h-6 rounded flex items-center justify-center shrink-0 mt-0.5"
-                    style={{ background: "var(--accent-soft)" }}
-                  >
-                    <span style={{ color: "var(--accent)" }}><IconSparkle /></span>
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="text-[12px] font-medium text-white/75 leading-snug">{s.title}</div>
-                    <div className="text-[11px] text-white/35 mt-0.5">{s.detail}</div>
-                    <button className="text-[11px] font-medium mt-1 transition-colors" style={{ color: "var(--accent)" }}>
-                      View
-                    </button>
-                  </div>
-                  <IconChevronRight />
-                </div>
-              ))}
-            </div>
+            <p className="text-[11px] text-white/30 italic mt-2">
+              AI-powered suggestions will appear here once the analysis pipeline is connected.
+            </p>
             <button
-              className="mt-4 w-full py-2 rounded-btn text-[12px] font-medium text-white/60 hover:text-white border border-white/10 hover:border-white/20 transition-colors"
+              disabled
+              title="Coming soon"
+              className="mt-4 w-full py-2 rounded-btn text-[12px] font-medium text-white/25 border border-white/8 cursor-not-allowed"
             >
               Ask AI about this workflow
             </button>

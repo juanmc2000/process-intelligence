@@ -248,11 +248,11 @@ export default function WorkflowNarrativePage() {
             <span className="text-white/70 truncate max-w-[200px]">{workflowName}</span>
           </div>
           <div className="flex items-center gap-2 shrink-0">
-            <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-btn text-[12px] font-medium text-white/60 hover:text-white hover:bg-white/5 transition-colors border border-white/10">
+            <button disabled title="Coming soon" className="flex items-center gap-1.5 px-3 py-1.5 rounded-btn text-[12px] font-medium text-white/30 border border-white/8 cursor-not-allowed">
               <IconShare />
               Share
             </button>
-            <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-btn text-[12px] font-medium text-white/60 hover:text-white hover:bg-white/5 transition-colors border border-white/10">
+            <button disabled title="Coming soon" className="flex items-center gap-1.5 px-3 py-1.5 rounded-btn text-[12px] font-medium text-white/30 border border-white/8 cursor-not-allowed">
               <IconExport />
               Export
             </button>
@@ -278,14 +278,7 @@ export default function WorkflowNarrativePage() {
               </span>
             </div>
             <div className="flex items-center gap-4 text-[11px] text-white/40">
-              <span>Last updated: recently</span>
-              <span>Owner: Operations</span>
-              <span
-                className="px-2 py-0.5 rounded-full text-[10px] font-medium border"
-                style={{ color: "var(--warning)", borderColor: "rgba(245,158,11,0.3)", background: "rgba(245,158,11,0.1)" }}
-              >
-                In review
-              </span>
+              <span className="italic">Last updated: not available</span>
             </div>
           </div>
           <div className="shrink-0">
@@ -325,21 +318,11 @@ export default function WorkflowNarrativePage() {
                 <p className="text-[14px] text-[var(--text-secondary)] leading-relaxed">
                   {narrativeSummary}
                 </p>
-                {ir && (
-                  <div className="mt-4 flex flex-wrap gap-2">
-                    {["SOPs", "Email", "Forms"].map((tag) => (
-                      <span
-                        key={tag}
-                        className="px-2.5 py-1 text-[11px] font-medium rounded-full border"
-                        style={{ color: "var(--accent)", borderColor: "var(--accent-soft)", background: "var(--accent-soft)" }}
-                      >
-                        {tag}
-                      </span>
-                    ))}
-                  </div>
-                )}
-                <button className="mt-3 text-[12px] text-accent font-medium hover:text-accent-hover transition-colors">
-                  View all sources →
+                <button
+                  onClick={() => setTab("sources")}
+                  className="mt-3 text-[12px] text-accent font-medium hover:text-accent-hover transition-colors"
+                >
+                  View sources →
                 </button>
               </section>
 
@@ -380,8 +363,11 @@ export default function WorkflowNarrativePage() {
                     </div>
                   ))}
                 </div>
-                <button className="mt-3 text-[12px] text-accent font-medium hover:text-accent-hover transition-colors">
-                  View all sources →
+                <button
+                  onClick={() => setTab("sources")}
+                  className="mt-3 text-[12px] text-accent font-medium hover:text-accent-hover transition-colors"
+                >
+                  View sources →
                 </button>
               </div>
 
