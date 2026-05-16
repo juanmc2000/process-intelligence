@@ -15,7 +15,7 @@ import ReactFlow, {
   BackgroundVariant,
 } from "reactflow";
 import "reactflow/dist/style.css";
-import { api, GraphResponse } from "@/lib/api";
+import { api, GraphResponse, ProcessDetailResponse } from "@/lib/api";
 
 // ---------------------------------------------------------------------------
 // Node colour palette (tuned for dark canvas)
@@ -148,14 +148,31 @@ function ConfidenceRingSmall({ score }: { score: number }) {
 }
 
 // ---------------------------------------------------------------------------
-// AI Suggestions (static placeholders)
+// Confidence helpers
 // ---------------------------------------------------------------------------
 
-const AI_SUGGESTIONS = [
-  { title: "Merge duplicate approvals", detail: "2 similar approval steps detected" },
-  { title: "Simplify escalation path", detail: "This path can be shortened" },
-  { title: "Standardize terminology", detail: "3 terms used for same activity" },
-];
+const CONFIDENCE_DIMENSION_LABELS: Record<string, string> = {
+  workflow_step_count: "Workflow steps",
+  decision_point_count: "Decision points",
+  system_touchpoint_count: "System touchpoints",
+  role_count: "Roles",
+  control_count: "Controls",
+  exception_count: "Exceptions",
+  change_event_count: "Change events",
+};
+
+function deriveConfidenceScore(summary: Record<string, number> | null): number {
+  if (!summary) return 0;
+  const populated = Object.values(summary).filter((v) => v > 0).length;
+  const total = Object.keys(summary).length || 1;
+  return Math.round(50 + (populated / total) * 40);
+}
+
+function deriveConfidenceLabel(score: number): string {
+  if (score >= 75) return "High";
+  if (score >= 58) return "Medium";
+  return "Low";
+}
 
 // ---------------------------------------------------------------------------
 // Page
@@ -178,21 +195,28 @@ export default function SpatialWorkflowPage() {
     exceptions: true,
   });
 
-  const confidenceScore = 84; // derived from graph metadata when available
+  const [confidenceSummary, setConfidenceSummary] = useState<Record<string, number> | null>(null);
 
   useEffect(() => {
     if (!id) return;
     let cancelled = false;
-    api.getProcessGraph(id).then((data) => {
+
+    Promise.all([
+      api.getProcessGraph(id),
+      api.getProcess(id).catch(() => null as ProcessDetailResponse | null),
+    ]).then(([graphResult, processResult]) => {
       if (cancelled) return;
-      setGraphData(data);
-      const rfNodes: Node[] = data.graph.nodes.map((n) => ({
+      setGraphData(graphResult);
+      if (processResult?.confidence_summary) {
+        setConfidenceSummary(processResult.confidence_summary as Record<string, number>);
+      }
+      const rfNodes: Node[] = graphResult.graph.nodes.map((n) => ({
         id: n.id,
         type: n.type,
         position: n.position,
         data: { ...n.data, nodeType: n.type },
       }));
-      const rfEdges: Edge[] = data.graph.edges.map((e) => ({
+      const rfEdges: Edge[] = graphResult.graph.edges.map((e) => ({
         id: e.id,
         source: e.source,
         target: e.target,
@@ -211,6 +235,9 @@ export default function SpatialWorkflowPage() {
     });
     return () => { cancelled = true; };
   }, [id, setNodes, setEdges]);
+
+  const confidenceScore = deriveConfidenceScore(confidenceSummary);
+  const confidenceLabel = deriveConfidenceLabel(confidenceScore);
 
   const workflowName = graphData?.graph.metadata?.process_name
     ? String(graphData.graph.metadata.process_name)
@@ -429,16 +456,36 @@ export default function SpatialWorkflowPage() {
           {/* Confidence */}
           <div className="p-4">
             <h3 className="text-[13px] font-semibold text-white mb-3">Confidence</h3>
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="text-[12px] text-white/50 mb-1">Overall Confidence</div>
-                <div className="text-[11px] text-white/30">Last updated recently</div>
-              </div>
-              <ConfidenceRingSmall score={confidenceScore} />
-            </div>
-            <button className="mt-3 text-[11px] font-medium transition-colors" style={{ color: "var(--accent)" }}>
-              How confidence works
-            </button>
+            {confidenceSummary ? (
+              <>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="text-[12px] text-white/50 mb-1">Overall — {confidenceLabel}</div>
+                    <div className="text-[11px] text-white/30">
+                      {Object.values(confidenceSummary).filter((v) => v > 0).length} of{" "}
+                      {Object.keys(confidenceSummary).length} dimensions populated
+                    </div>
+                  </div>
+                  <ConfidenceRingSmall score={confidenceScore} />
+                </div>
+                <div className="mt-3 pt-3 border-t border-white/5 space-y-1.5">
+                  {Object.entries(confidenceSummary).map(([key, val]) => (
+                    <div key={key} className="flex items-center justify-between text-[11px]">
+                      <span className="text-white/35 truncate">
+                        {CONFIDENCE_DIMENSION_LABELS[key] ?? key}
+                      </span>
+                      <span className={val > 0 ? "text-emerald-400" : "text-white/20"}>
+                        {val > 0 ? val : "—"}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <p className="text-[11px] text-white/30 italic">
+                Confidence data not available for this process.
+              </p>
+            )}
 
             {/* Graph stats */}
             {graphData?.graph.metadata && (
