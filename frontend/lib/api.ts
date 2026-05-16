@@ -156,6 +156,106 @@ export interface ProcessGroupsResponse {
   singleton_count: number;
 }
 
+// ---------------------------------------------------------------------------
+// Sprint 8A: Explainability types
+// ---------------------------------------------------------------------------
+
+export interface EntityExplanation {
+  entity_id: string;
+  entity_type: string;
+  label: string;
+  evidence_count: number;
+  evidence_locations: string[];
+  confidence_tier: "high" | "medium" | "low" | "unverified";
+  rationale: string;
+}
+
+export interface EdgeExplanation {
+  edge_id: string;
+  edge_type: string;
+  source_label: string;
+  target_label: string;
+  basis: string;
+  rationale: string;
+}
+
+export interface ConfidenceDimension {
+  name: string;
+  display_name: string;
+  count: number;
+  weight: number;
+  score_contribution: number;
+  present: boolean;
+  description: string;
+}
+
+export interface ConfidenceDecomposition {
+  process_id: string;
+  overall_score: number;
+  tier: "high" | "medium" | "low";
+  total_data_points: number;
+  dimensions: ConfidenceDimension[];
+  rationale: string;
+}
+
+export interface EvidenceLineageSummary {
+  process_id: string;
+  total_evidence_refs: number;
+  entities_with_evidence: number;
+  total_entities: number;
+  coverage_ratio: number;
+  well_evidenced_entity_labels: string[];
+  unevidenced_entity_types: string[];
+  lineage_note: string;
+}
+
+export interface ProcessExplanationResponse {
+  extraction_result_id: string;
+  process_id: string;
+  schema_version: string;
+  entity_explanations: EntityExplanation[];
+  edge_explanations: EdgeExplanation[];
+  confidence_decomposition: ConfidenceDecomposition | null;
+  evidence_lineage: EvidenceLineageSummary | null;
+}
+
+export interface DimensionExplanation {
+  dimension: string;
+  score: number;
+  weight: number;
+  weighted_contribution: number;
+  overlap_count: number;
+  shared_labels: string[];
+  description: string;
+}
+
+export interface SimilarityExplanationDetail {
+  process_id_a: string;
+  process_id_b: string;
+  composite_score: number;
+  verdict: string;
+  dimensions: DimensionExplanation[];
+  top_driver_dimensions: string[];
+  human_summary: string;
+}
+
+export interface SimilarityExplanationItem {
+  other_extraction_result_id: string;
+  explanation: SimilarityExplanationDetail;
+}
+
+export interface SimilarityExplanationsResponse {
+  extraction_result_id: string;
+  process_id: string;
+  comparisons: SimilarityExplanationItem[];
+}
+
+export interface GraphExplanationsResponse {
+  extraction_result_id: string;
+  process_id: string;
+  edge_explanations: EdgeExplanation[];
+}
+
 export interface ReviewSummaryResponse {
   run_id: string;
   sessions: Record<string, unknown>[];
@@ -303,6 +403,30 @@ export const api = {
   getProcessGroups(threshold?: number): Promise<ProcessGroupsResponse> {
     const qs = threshold !== undefined ? `?threshold=${threshold}` : "";
     return get<ProcessGroupsResponse>(`/processes/groups${qs}`);
+  },
+
+  /** Get full explainability bundle for a process */
+  getProcessExplanations(id: string): Promise<ProcessExplanationResponse> {
+    return get<ProcessExplanationResponse>(`/processes/${id}/explanations`);
+  },
+
+  /** Get similarity explanations for a process vs its neighbours */
+  getSimilarityExplanations(
+    id: string,
+    params: { limit?: number; min_score?: number } = {}
+  ): Promise<SimilarityExplanationsResponse> {
+    const qs = new URLSearchParams();
+    if (params.limit !== undefined) qs.set("limit", String(params.limit));
+    if (params.min_score !== undefined) qs.set("min_score", String(params.min_score));
+    const query = qs.toString();
+    return get<SimilarityExplanationsResponse>(
+      `/processes/${id}/similarity-explanations${query ? `?${query}` : ""}`
+    );
+  },
+
+  /** Get edge-level explanations for the workflow graph */
+  getGraphExplanations(id: string): Promise<GraphExplanationsResponse> {
+    return get<GraphExplanationsResponse>(`/processes/${id}/graph/explanations`);
   },
 
   /** Submit taxonomy feedback */

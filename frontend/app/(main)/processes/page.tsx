@@ -31,21 +31,50 @@ function GroupsPanel({ groups }: { groups: ProcessGroupsResponse["groups"] }) {
   if (multi.length === 0) return null;
   return (
     <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-6">
-      <h2 className="text-sm font-semibold text-amber-800 mb-2">
-        Similarity Groups ({multi.length})
+      <h2 className="text-sm font-semibold text-amber-800 mb-1">
+        Similarity groups — {multi.length} cluster{multi.length !== 1 ? "s" : ""} detected
       </h2>
-      <div className="space-y-2">
-        {multi.map((g) => (
-          <div key={g.cluster_id} className="text-xs text-amber-700">
-            <span className="font-medium">{g.cluster_id}</span> — {g.process_ids.length} processes,
-            cohesion {(g.cohesion * 100).toFixed(0)}%
-            {g.recommend_merge && (
-              <span className="ml-2 bg-amber-200 text-amber-900 px-1 rounded">
-                merge candidate
-              </span>
-            )}
-          </div>
-        ))}
+      <p className="text-xs text-amber-700 mb-3">
+        Processes below may describe the same operational workflow. Review each group to confirm.
+      </p>
+      <div className="space-y-3">
+        {multi.map((g) => {
+          const cohortPct = Math.round(g.cohesion * 100);
+          const verdict = g.recommend_merge ? "merge candidate" : "related";
+          return (
+            <div key={g.cluster_id} className="bg-white border border-amber-200 rounded p-3">
+              <div className="flex items-center justify-between gap-3 mb-1.5">
+                <span className="text-xs font-semibold text-amber-900">
+                  {g.process_ids.length} processes — {cohortPct}% cohesion
+                </span>
+                <span className={`text-[10px] font-medium px-2 py-0.5 rounded border ${
+                  g.recommend_merge
+                    ? "bg-amber-100 text-amber-800 border-amber-300"
+                    : "bg-gray-100 text-gray-600 border-gray-200"
+                }`}>
+                  {verdict}
+                </span>
+              </div>
+              {g.merge_note && (
+                <p className="text-[11px] text-amber-700 italic mb-1.5">{g.merge_note}</p>
+              )}
+              <div className="flex flex-wrap gap-1">
+                {g.process_ids.slice(0, 4).map((pid) => (
+                  <Link
+                    key={pid}
+                    href={`/processes/${pid}`}
+                    className="text-[10px] px-1.5 py-0.5 bg-amber-100 text-amber-800 rounded hover:bg-amber-200 font-mono truncate max-w-[140px]"
+                  >
+                    {pid.slice(0, 8)}…
+                  </Link>
+                ))}
+                {g.process_ids.length > 4 && (
+                  <span className="text-[10px] text-amber-600">+{g.process_ids.length - 4} more</span>
+                )}
+              </div>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
@@ -177,6 +206,12 @@ export default function ProcessDashboard() {
                     className="text-xs px-2 py-1 bg-green-50 text-green-700 rounded hover:bg-green-100 transition-colors"
                   >
                     Timeline
+                  </Link>
+                  <Link
+                    href={`/processes/${p.extraction_result_id}?tab=explanations`}
+                    className="text-xs px-2 py-1 bg-slate-50 text-slate-600 rounded hover:bg-slate-100 transition-colors"
+                  >
+                    Explain
                   </Link>
                 </div>
               </div>
