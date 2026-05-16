@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
+import Link from "next/link";
 import ReactFlow, {
   Background,
   Controls,
@@ -11,63 +12,54 @@ import ReactFlow, {
   NodeTypes,
   useNodesState,
   useEdgesState,
+  BackgroundVariant,
 } from "reactflow";
 import "reactflow/dist/style.css";
 import { api, GraphResponse } from "@/lib/api";
 
 // ---------------------------------------------------------------------------
-// Node colours by type
+// Node colour palette (tuned for dark canvas)
 // ---------------------------------------------------------------------------
 
-const NODE_COLOURS: Record<string, { bg: string; border: string; text: string }> = {
-  workflow_step: { bg: "#dbeafe", border: "#3b82f6", text: "#1e3a5f" },
-  role: { bg: "#d1fae5", border: "#10b981", text: "#065f46" },
-  system: { bg: "#ede9fe", border: "#8b5cf6", text: "#4c1d95" },
-  control: { bg: "#fef3c7", border: "#f59e0b", text: "#78350f" },
-  decision: { bg: "#fee2e2", border: "#ef4444", text: "#7f1d1d" },
-  exception: { bg: "#fce7f3", border: "#ec4899", text: "#831843" },
-  handoff: { bg: "#e0f2fe", border: "#0ea5e9", text: "#0c4a6e" },
+const NODE_PALETTE: Record<string, { bg: string; border: string; text: string; dot: string }> = {
+  workflow_step: { bg: "#1e3a2e", border: "#10b981", text: "#a7f3d0", dot: "#10b981" },
+  role:          { bg: "#1e2a3e", border: "#60a5fa", text: "#bfdbfe", dot: "#60a5fa" },
+  system:        { bg: "#2d1e3e", border: "#a78bfa", text: "#ddd6fe", dot: "#a78bfa" },
+  control:       { bg: "#3a2d1e", border: "#f59e0b", text: "#fde68a", dot: "#f59e0b" },
+  decision:      { bg: "#3a1e1e", border: "#f87171", text: "#fecaca", dot: "#f87171" },
+  exception:     { bg: "#3a1e2e", border: "#f472b6", text: "#fbcfe8", dot: "#f472b6" },
+  handoff:       { bg: "#1e2e3a", border: "#38bdf8", text: "#bae6fd", dot: "#38bdf8" },
 };
 
+const DEFAULT_PALETTE = { bg: "#1e2433", border: "#4b5563", text: "#e5e7eb", dot: "#6b7280" };
+
 // ---------------------------------------------------------------------------
-// Custom node renderer — a simple card with colour by type
+// Custom node
 // ---------------------------------------------------------------------------
 
 function ProcessNode({ data }: { data: { label: string; nodeType: string } }) {
-  const colours = NODE_COLOURS[data.nodeType] ?? {
-    bg: "#f3f4f6",
-    border: "#9ca3af",
-    text: "#1f2937",
-  };
+  const p = NODE_PALETTE[data.nodeType] ?? DEFAULT_PALETTE;
   return (
     <div
       style={{
-        background: colours.bg,
-        border: `2px solid ${colours.border}`,
-        color: colours.text,
-        borderRadius: 8,
-        padding: "8px 14px",
-        minWidth: 120,
+        background: p.bg,
+        border: `1.5px solid ${p.border}`,
+        borderRadius: 10,
+        padding: "8px 12px",
+        minWidth: 130,
         maxWidth: 200,
-        fontSize: 12,
-        fontWeight: 600,
-        textAlign: "center",
-        boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
+        boxShadow: `0 0 0 1px ${p.border}22, 0 4px 12px rgba(0,0,0,0.4)`,
       }}
     >
-      <div
-        style={{
-          fontSize: 9,
-          fontWeight: 400,
-          opacity: 0.7,
-          textTransform: "uppercase",
-          letterSpacing: "0.05em",
-          marginBottom: 2,
-        }}
-      >
-        {data.nodeType.replace("_", " ")}
+      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+        <div style={{ width: 7, height: 7, borderRadius: "50%", background: p.dot, flexShrink: 0 }} />
+        <span style={{ fontSize: 12, fontWeight: 600, color: p.text, lineHeight: 1.3 }}>
+          {data.label}
+        </span>
       </div>
-      {data.label}
+      <div style={{ fontSize: 9, color: p.dot, opacity: 0.7, textTransform: "uppercase", letterSpacing: "0.06em", marginTop: 3, paddingLeft: 13 }}>
+        {data.nodeType.replace(/_/g, " ")}
+      </div>
     </div>
   );
 }
@@ -83,182 +75,387 @@ const nodeTypes: NodeTypes = {
 };
 
 // ---------------------------------------------------------------------------
-// Metadata panel
+// Icons
 // ---------------------------------------------------------------------------
 
-function MetadataPanel({
-  metadata,
-  onClose,
-}: {
-  metadata: Record<string, unknown>;
-  onClose: () => void;
-}) {
+function IconShare() {
   return (
-    <div className="absolute top-4 right-4 z-10 bg-white border border-gray-200 rounded-lg shadow-lg p-4 w-64">
-      <div className="flex items-center justify-between mb-3">
-        <h3 className="text-sm font-semibold text-gray-900">Graph Info</h3>
-        <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xs">
-          ✕
-        </button>
-      </div>
-      <div className="space-y-1 text-xs text-gray-600">
-        <div>
-          <span className="font-medium">Nodes:</span>{" "}
-          {String(metadata.node_count ?? 0)}
-        </div>
-        <div>
-          <span className="font-medium">Edges:</span>{" "}
-          {String(metadata.edge_count ?? 0)}
-        </div>
-        {Boolean(
-          metadata.node_type_counts &&
-            typeof metadata.node_type_counts === "object"
-        ) && (
-            <div className="mt-2">
-              <div className="font-medium mb-1">By type:</div>
-              {Object.entries(
-                metadata.node_type_counts as Record<string, number>
-              ).map(([t, n]) => (
-                <div key={t} className="flex justify-between">
-                  <span>{t.replace(/_/g, " ")}</span>
-                  <span>{String(n)}</span>
-                </div>
-              ))}
-            </div>
-          )}
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
+      <circle cx="18" cy="5" r="3" /><circle cx="6" cy="12" r="3" /><circle cx="18" cy="19" r="3" />
+      <line x1="8.59" y1="13.51" x2="15.42" y2="17.49" /><line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
+    </svg>
+  );
+}
+
+function IconChevronDown() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="w-3.5 h-3.5">
+      <polyline points="6 9 12 15 18 9" />
+    </svg>
+  );
+}
+
+function IconChevronRight() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="w-3.5 h-3.5">
+      <polyline points="9 18 15 12 9 6" />
+    </svg>
+  );
+}
+
+function IconSparkle() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" className="w-3.5 h-3.5">
+      <path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 17l-6.2 4.3 2.4-7.4L2 9.4h7.6z" />
+    </svg>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Layer toggle
+// ---------------------------------------------------------------------------
+
+type LayerKey = "departments" | "systems" | "approvals" | "exceptions";
+
+const LAYER_LABELS: Record<LayerKey, string> = {
+  departments: "Departments",
+  systems: "Systems",
+  approvals: "Approvals",
+  exceptions: "Exceptions",
+};
+
+// ---------------------------------------------------------------------------
+// Confidence ring (compact)
+// ---------------------------------------------------------------------------
+
+function ConfidenceRingSmall({ score }: { score: number }) {
+  const r = 22;
+  const circ = 2 * Math.PI * r;
+  const offset = circ - (score / 100) * circ;
+  const color = score >= 75 ? "#10b981" : score >= 50 ? "#f59e0b" : "#ef4444";
+  return (
+    <div className="relative w-14 h-14">
+      <svg className="w-14 h-14 -rotate-90" viewBox="0 0 56 56">
+        <circle cx="28" cy="28" r={r} fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="5" />
+        <circle cx="28" cy="28" r={r} fill="none" stroke={color} strokeWidth="5"
+          strokeDasharray={circ} strokeDashoffset={offset} strokeLinecap="round" />
+      </svg>
+      <div className="absolute inset-0 flex items-center justify-center">
+        <span className="text-[13px] font-bold" style={{ color }}>{score}%</span>
       </div>
     </div>
   );
 }
 
 // ---------------------------------------------------------------------------
-// Main graph page
+// AI Suggestions (static placeholders)
 // ---------------------------------------------------------------------------
 
-export default function ProcessGraphPage() {
+const AI_SUGGESTIONS = [
+  { title: "Merge duplicate approvals", detail: "2 similar approval steps detected" },
+  { title: "Simplify escalation path", detail: "This path can be shortened" },
+  { title: "Standardize terminology", detail: "3 terms used for same activity" },
+];
+
+// ---------------------------------------------------------------------------
+// Page
+// ---------------------------------------------------------------------------
+
+export default function SpatialWorkflowPage() {
   const params = useParams<{ id: string }>();
   const id = params?.id ?? "";
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [graphData, setGraphData] = useState<GraphResponse | null>(null);
-  const [showPanel, setShowPanel] = useState(true);
-
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
+
+  const [layers, setLayers] = useState<Record<LayerKey, boolean>>({
+    departments: true,
+    systems: true,
+    approvals: true,
+    exceptions: true,
+  });
+
+  const confidenceScore = 84; // derived from graph metadata when available
 
   useEffect(() => {
     if (!id) return;
     let cancelled = false;
-    async function load() {
-      try {
-        const data = await api.getProcessGraph(id);
-        if (cancelled) return;
-        setGraphData(data);
-        // Map API graph payload to React Flow nodes/edges
-        const rfNodes: Node[] = data.graph.nodes.map((n) => ({
-          id: n.id,
-          type: n.type,
-          position: n.position,
-          data: { ...n.data, nodeType: n.type },
-        }));
-        const rfEdges: Edge[] = data.graph.edges.map((e) => ({
-          id: e.id,
-          source: e.source,
-          target: e.target,
-          type: "smoothstep",
-          label: e.label,
-          animated: e.animated ?? false,
-          style: { stroke: "#94a3b8" },
-        }));
-        setNodes(rfNodes);
-        setEdges(rfEdges);
-      } catch (e) {
-        if (!cancelled)
-          setError(e instanceof Error ? e.message : "Failed to load graph");
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    }
-    load();
-    return () => {
-      cancelled = true;
-    };
+    api.getProcessGraph(id).then((data) => {
+      if (cancelled) return;
+      setGraphData(data);
+      const rfNodes: Node[] = data.graph.nodes.map((n) => ({
+        id: n.id,
+        type: n.type,
+        position: n.position,
+        data: { ...n.data, nodeType: n.type },
+      }));
+      const rfEdges: Edge[] = data.graph.edges.map((e) => ({
+        id: e.id,
+        source: e.source,
+        target: e.target,
+        type: "smoothstep",
+        label: e.label,
+        animated: e.animated ?? false,
+        style: { stroke: "#475569", strokeWidth: 1.5 },
+        labelStyle: { fontSize: 10, fill: "#94a3b8", fontWeight: 500 },
+        labelBgStyle: { fill: "#0f1d33", fillOpacity: 0.8 },
+      }));
+      setNodes(rfNodes);
+      setEdges(rfEdges);
+      setLoading(false);
+    }).catch((e) => {
+      if (!cancelled) { setError(e instanceof Error ? e.message : "Failed to load graph"); setLoading(false); }
+    });
+    return () => { cancelled = true; };
   }, [id, setNodes, setEdges]);
 
+  const workflowName = graphData?.graph.metadata?.process_name
+    ? String(graphData.graph.metadata.process_name)
+    : "Workflow";
+
   if (loading) {
-    return <div className="p-8 text-gray-500">Loading workflow graph…</div>;
+    return (
+      <div className="flex items-center justify-center h-full text-[var(--text-muted)] text-sm" style={{ background: "var(--navy-900)" }}>
+        Loading workflow graph…
+      </div>
+    );
   }
 
   if (error) {
     return (
-      <div className="p-8">
-        <div className="bg-red-50 border border-red-200 text-red-700 p-4 rounded-lg">
+      <div className="p-8" style={{ background: "var(--navy-900)" }}>
+        <div className="p-4 text-sm rounded-lg border" style={{ color: "var(--danger)", borderColor: "rgba(239,68,68,0.3)", background: "rgba(239,68,68,0.08)" }}>
           {error}
         </div>
       </div>
     );
   }
 
-  if (!graphData || nodes.length === 0) {
-    return (
-      <div className="p-8 text-gray-500">
-        No graph data available for this process.
-      </div>
-    );
-  }
-
   return (
-    <div className="relative" style={{ height: "calc(100vh - 4rem)" }}>
-      {/* Toolbar */}
-      <div className="absolute top-4 left-4 z-10 flex gap-2">
-        <a
-          href={`/processes/${id}`}
-          className="text-xs px-3 py-1.5 bg-white border border-gray-200 rounded shadow-sm text-gray-700 hover:bg-gray-50"
-        >
-          ← Details
-        </a>
-        <a
-          href={`/processes/${id}/timeline`}
-          className="text-xs px-3 py-1.5 bg-white border border-gray-200 rounded shadow-sm text-gray-700 hover:bg-gray-50"
-        >
-          Timeline
-        </a>
-        {!showPanel && (
-          <button
-            onClick={() => setShowPanel(true)}
-            className="text-xs px-3 py-1.5 bg-white border border-gray-200 rounded shadow-sm text-gray-700 hover:bg-gray-50"
-          >
-            Info
-          </button>
-        )}
+    <div className="flex flex-col h-full" style={{ background: "var(--navy-950)" }}>
+      {/* Dark header */}
+      <div className="shrink-0 px-6 py-0" style={{ background: "var(--navy-900)", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+        {/* Title row */}
+        <div className="flex items-center justify-between gap-4 py-3">
+          <div className="flex items-center gap-3 min-w-0">
+            <Link
+              href={`/processes/${id}`}
+              className="text-white/40 hover:text-white/70 transition-colors text-[12px]"
+            >
+              ← Back
+            </Link>
+            <span className="text-white/20">|</span>
+            <h1 className="text-[16px] font-semibold text-white truncate">{workflowName}</h1>
+            <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-white/10 text-white/50 border border-white/10 shrink-0">
+              Draft
+            </span>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-btn text-[12px] font-medium text-white/50 hover:text-white hover:bg-white/5 border border-white/10 transition-colors">
+              <IconShare />
+              Share
+            </button>
+            <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-btn text-[12px] font-medium text-white/50 hover:text-white hover:bg-white/5 border border-white/10 transition-colors">
+              Export
+              <IconChevronDown />
+            </button>
+            <button className="flex items-center gap-1.5 px-4 py-1.5 rounded-btn text-[12px] font-semibold text-white transition-colors" style={{ background: "var(--accent)" }}>
+              Review &amp; Publish
+            </button>
+          </div>
+        </div>
+
+        {/* Tab strip */}
+        <div className="flex items-end gap-1">
+          {["Overview", "Canvas", "Details", "Insights", "Sources"].map((t) => (
+            <button
+              key={t}
+              className={[
+                "px-4 py-2 text-[13px] font-medium border-b-2 transition-colors",
+                t === "Canvas"
+                  ? "border-white text-white"
+                  : "border-transparent text-white/40 hover:text-white/60",
+              ].join(" ")}
+            >
+              {t}
+            </button>
+          ))}
+        </div>
       </div>
 
-      {/* Metadata panel */}
-      {showPanel && graphData.graph.metadata && (
-        <MetadataPanel
-          metadata={graphData.graph.metadata}
-          onClose={() => setShowPanel(false)}
-        />
-      )}
+      {/* Canvas area */}
+      <div className="flex flex-1 overflow-hidden">
+        {/* Left panel */}
+        <div
+          className="w-48 shrink-0 flex flex-col gap-3 p-3 border-r overflow-y-auto"
+          style={{ background: "var(--navy-900)", borderColor: "rgba(255,255,255,0.06)" }}
+        >
+          {/* Mini-map placeholder label */}
+          <div className="rounded-lg overflow-hidden border border-white/8" style={{ background: "var(--navy-800)" }}>
+            <div className="px-3 py-2 flex items-center justify-between border-b border-white/5">
+              <span className="text-[11px] font-medium text-white/50">Mini map</span>
+              <button className="text-white/30 hover:text-white/60 text-[10px]">✕</button>
+            </div>
+            <div className="h-24 flex items-center justify-center">
+              <span className="text-[10px] text-white/20">Canvas preview</span>
+            </div>
+          </div>
 
-      {/* React Flow canvas */}
-      <ReactFlow
-        nodes={nodes}
-        edges={edges}
-        onNodesChange={onNodesChange}
-        onEdgesChange={onEdgesChange}
-        nodeTypes={nodeTypes}
-        fitView
-        fitViewOptions={{ padding: 0.2 }}
-        minZoom={0.2}
-        maxZoom={2}
-        attributionPosition="bottom-right"
-      >
-        <Background gap={16} color="#e5e7eb" />
-        <Controls />
-        <MiniMap nodeColor={(n) => NODE_COLOURS[n.type ?? ""]?.border ?? "#9ca3af"} />
-      </ReactFlow>
+          {/* Zoom indicator */}
+          <div className="flex items-center justify-between px-1">
+            <button className="text-white/30 hover:text-white/60 text-[11px]">−</button>
+            <span className="text-[11px] text-white/40">100%</span>
+            <button className="text-white/30 hover:text-white/60 text-[11px]">+</button>
+          </div>
+
+          {/* Layers */}
+          <div>
+            <div className="text-[10px] font-semibold text-white/30 uppercase tracking-wide px-1 mb-2">
+              Layers
+            </div>
+            <div className="space-y-1.5">
+              {(Object.keys(layers) as LayerKey[]).map((k) => (
+                <label key={k} className="flex items-center gap-2 px-1 cursor-pointer group">
+                  <input
+                    type="checkbox"
+                    checked={layers[k]}
+                    onChange={() => setLayers((prev) => ({ ...prev, [k]: !prev[k] }))}
+                    className="w-3.5 h-3.5 accent-accent rounded"
+                  />
+                  <span className="text-[12px] text-white/50 group-hover:text-white/70 transition-colors">
+                    {LAYER_LABELS[k]}
+                  </span>
+                </label>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* React Flow canvas */}
+        <div className="flex-1 relative" style={{ background: "#0a1628" }}>
+          {nodes.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-full gap-3 text-white/30">
+              <p className="text-[14px]">No graph data available for this process.</p>
+              <Link href={`/processes/${id}`} className="text-[12px] text-white/50 hover:text-white/70 underline">
+                Back to narrative
+              </Link>
+            </div>
+          ) : (
+            <ReactFlow
+              nodes={nodes}
+              edges={edges}
+              onNodesChange={onNodesChange}
+              onEdgesChange={onEdgesChange}
+              nodeTypes={nodeTypes}
+              fitView
+              fitViewOptions={{ padding: 0.25 }}
+              minZoom={0.1}
+              maxZoom={2.5}
+              attributionPosition="bottom-right"
+            >
+              <Background variant={BackgroundVariant.Dots} gap={20} size={1} color="rgba(255,255,255,0.04)" />
+              <Controls
+                style={{
+                  background: "var(--navy-800)",
+                  border: "1px solid rgba(255,255,255,0.08)",
+                  borderRadius: 8,
+                }}
+              />
+              <MiniMap
+                nodeColor={(n) => NODE_PALETTE[n.type ?? ""]?.dot ?? "#4b5563"}
+                style={{ background: "var(--navy-850)", border: "1px solid rgba(255,255,255,0.08)" }}
+              />
+            </ReactFlow>
+          )}
+
+          {/* Legend */}
+          <div
+            className="absolute bottom-4 left-4 flex items-center gap-4 px-3 py-2 rounded-lg text-[10px]"
+            style={{ background: "rgba(7,17,31,0.85)", border: "1px solid rgba(255,255,255,0.06)" }}
+          >
+            <span className="flex items-center gap-1.5 text-white/40">
+              <span className="inline-block w-6 border-t border-white/30" />
+              Standard flow
+            </span>
+            <span className="flex items-center gap-1.5 text-white/40">
+              <span className="inline-block w-6 border-t border-dashed border-white/30" />
+              Exception flow
+            </span>
+          </div>
+        </div>
+
+        {/* Right panel */}
+        <div
+          className="w-60 shrink-0 flex flex-col gap-0 border-l overflow-y-auto"
+          style={{ background: "var(--navy-900)", borderColor: "rgba(255,255,255,0.06)" }}
+        >
+          {/* AI Suggestions */}
+          <div className="p-4 border-b border-white/5">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-[13px] font-semibold text-white">AI Suggestions</h3>
+              <button className="text-white/30 hover:text-white/60 text-[10px]">···</button>
+            </div>
+            <p className="text-[11px] text-white/35 mb-3">{AI_SUGGESTIONS.length} suggestions</p>
+            <div className="space-y-3">
+              {AI_SUGGESTIONS.map((s) => (
+                <div key={s.title} className="flex items-start gap-2">
+                  <div
+                    className="w-6 h-6 rounded flex items-center justify-center shrink-0 mt-0.5"
+                    style={{ background: "var(--accent-soft)" }}
+                  >
+                    <span style={{ color: "var(--accent)" }}><IconSparkle /></span>
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="text-[12px] font-medium text-white/75 leading-snug">{s.title}</div>
+                    <div className="text-[11px] text-white/35 mt-0.5">{s.detail}</div>
+                    <button className="text-[11px] font-medium mt-1 transition-colors" style={{ color: "var(--accent)" }}>
+                      View
+                    </button>
+                  </div>
+                  <IconChevronRight />
+                </div>
+              ))}
+            </div>
+            <button
+              className="mt-4 w-full py-2 rounded-btn text-[12px] font-medium text-white/60 hover:text-white border border-white/10 hover:border-white/20 transition-colors"
+            >
+              Ask AI about this workflow
+            </button>
+          </div>
+
+          {/* Confidence */}
+          <div className="p-4">
+            <h3 className="text-[13px] font-semibold text-white mb-3">Confidence</h3>
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-[12px] text-white/50 mb-1">Overall Confidence</div>
+                <div className="text-[11px] text-white/30">Last updated recently</div>
+              </div>
+              <ConfidenceRingSmall score={confidenceScore} />
+            </div>
+            <button className="mt-3 text-[11px] font-medium transition-colors" style={{ color: "var(--accent)" }}>
+              How confidence works
+            </button>
+
+            {/* Graph stats */}
+            {graphData?.graph.metadata && (
+              <div className="mt-4 pt-4 border-t border-white/5 space-y-2">
+                <div className="flex justify-between text-[11px]">
+                  <span className="text-white/35">Nodes</span>
+                  <span className="text-white/60">{String(graphData.graph.metadata.node_count ?? nodes.length)}</span>
+                </div>
+                <div className="flex justify-between text-[11px]">
+                  <span className="text-white/35">Edges</span>
+                  <span className="text-white/60">{String(graphData.graph.metadata.edge_count ?? edges.length)}</span>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
