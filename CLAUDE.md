@@ -190,3 +190,21 @@ The API is stateless. It must not do long-running work inline. All heavy process
 
 - Record important architectural decisions in `docs/adr/`.
 - Keep architecture and data-flow documentation aligned with implementation.
+
+## UI Visual References
+
+Use the approved reference images in:
+
+.ai/design/references/
+
+These are canonical UI references and should guide:
+- spacing
+- shell layout
+- typography
+- card styling
+- workflow layout
+- visual hierarchy
+- sidebar structure
+- banner proportions
+
+Do not significantly diverge from these references unless explicitly instructed.
