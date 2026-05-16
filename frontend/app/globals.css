@@ -3,25 +3,67 @@
 @tailwind utilities;
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --navy-950: #050B18;
+  --navy-900: #07111F;
+  --navy-850: #0B1628;
+  --navy-800: #0F1D33;
+
+  --surface: #FFFFFF;
+  --surface-soft: #F7F8FB;
+  --surface-muted: #F2F4F8;
+
+  --border-soft: #E4E8F0;
+  --border-strong: #CBD5E1;
+
+  --text-primary: #0F172A;
+  --text-secondary: #475569;
+  --text-muted: #94A3B8;
+
+  --accent: #4F46E5;
+  --accent-hover: #4338CA;
+  --accent-soft: #EEF2FF;
+
+  --success: #10B981;
+  --warning: #F59E0B;
+  --danger: #EF4444;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html,
+body {
+  height: 100%;
 }
 
 body {
-  color: var(--foreground);
-  background: var(--background);
-  font-family: Arial, Helvetica, sans-serif;
+  color: var(--text-primary);
+  background: var(--surface-soft);
+  font-family: Inter, system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 @layer utilities {
   .text-balance {
     text-wrap: balance;
+  }
+
+  .card {
+    background: #ffffff;
+    border: 1px solid var(--border-soft);
+    border-radius: 20px;
+    box-shadow:
+      0 1px 2px rgba(15, 23, 42, 0.04),
+      0 16px 32px rgba(15, 23, 42, 0.045);
+  }
+
+  .shell-divider {
+    box-shadow:
+      12px 0 28px rgba(15, 23, 42, 0.16),
+      inset -1px 0 rgba(255, 255, 255, 0.06);
+  }
+
+  .header-divider {
+    box-shadow:
+      0 14px 34px rgba(15, 23, 42, 0.18),
+      inset 0 -1px rgba(255, 255, 255, 0.06);
   }
 }
