@@ -2,245 +2,475 @@
 
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
+import Link from "next/link";
 import { api, ProcessDetailResponse } from "@/lib/api";
 
 // ---------------------------------------------------------------------------
-// Confidence summary card
+// Types
 // ---------------------------------------------------------------------------
 
-function ConfidenceSummary({
-  summary,
-}: {
-  summary: Record<string, number>;
-}) {
-  const items = [
-    { label: "Workflow Steps", key: "workflow_step_count" },
-    { label: "Roles", key: "role_count" },
-    { label: "Systems", key: "system_touchpoint_count" },
-    { label: "Controls", key: "control_count" },
-    { label: "Decisions", key: "decision_point_count" },
-    { label: "Exceptions", key: "exception_count" },
-    { label: "Changes", key: "change_event_count" },
-  ];
+type Tab = "narrative" | "workflow" | "sources" | "insights" | "activity";
+
+// ---------------------------------------------------------------------------
+// Icons
+// ---------------------------------------------------------------------------
+
+function IconShare() {
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
-      {items.map(({ label, key }) => (
-        <div
-          key={key}
-          className="bg-white border border-gray-200 rounded-lg p-3 text-center"
-        >
-          <div className="text-2xl font-bold text-gray-900">
-            {summary[key] ?? 0}
-          </div>
-          <div className="text-xs text-gray-500 mt-0.5">{label}</div>
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
+      <circle cx="18" cy="5" r="3" /><circle cx="6" cy="12" r="3" /><circle cx="18" cy="19" r="3" />
+      <line x1="8.59" y1="13.51" x2="15.42" y2="17.49" /><line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
+    </svg>
+  );
+}
+
+function IconExport() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
+      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+      <polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" />
+    </svg>
+  );
+}
+
+function IconChevronRight() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="w-3.5 h-3.5">
+      <polyline points="9 18 15 12 9 6" />
+    </svg>
+  );
+}
+
+function IconAlertTriangle() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" className="w-3.5 h-3.5">
+      <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+      <line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" />
+    </svg>
+  );
+}
+
+function IconCheckCircle() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" className="w-3.5 h-3.5">
+      <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+      <polyline points="22 4 12 14.01 9 11.01" />
+    </svg>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Confidence ring SVG
+// ---------------------------------------------------------------------------
+
+function ConfidenceRing({ score }: { score: number }) {
+  const r = 28;
+  const circ = 2 * Math.PI * r;
+  const offset = circ - (score / 100) * circ;
+  const color = score >= 75 ? "#10B981" : score >= 50 ? "#F59E0B" : "#EF4444";
+  const label = score >= 75 ? "High confidence" : score >= 50 ? "Medium confidence" : "Low confidence";
+
+  return (
+    <div className="flex flex-col items-center gap-2">
+      <div className="relative w-20 h-20">
+        <svg className="w-20 h-20 -rotate-90" viewBox="0 0 72 72">
+          <circle cx="36" cy="36" r={r} fill="none" stroke="#E4E8F0" strokeWidth="6" />
+          <circle
+            cx="36" cy="36" r={r} fill="none"
+            stroke={color} strokeWidth="6"
+            strokeDasharray={circ}
+            strokeDashoffset={offset}
+            strokeLinecap="round"
+          />
+        </svg>
+        <div className="absolute inset-0 flex items-center justify-center">
+          <span className="text-[18px] font-bold" style={{ color }}>{score}%</span>
         </div>
-      ))}
+      </div>
+      <span className="text-[12px] font-semibold" style={{ color }}>{label}</span>
     </div>
   );
 }
 
 // ---------------------------------------------------------------------------
-// Main process detail page
+// Helpers: derive narrative content from ProcessIR
 // ---------------------------------------------------------------------------
 
-export default function ProcessDetailPage() {
+function deriveWorkflowName(data: ProcessDetailResponse): string {
+  const ir = data.process_ir as Record<string, unknown> | null;
+  if (ir?.process_name && typeof ir.process_name === "string") return ir.process_name;
+  return "Workflow";
+}
+
+function deriveSummary(ir: Record<string, unknown>): string {
+  const steps = (ir.workflow_steps as unknown[]) ?? [];
+  const roles = (ir.roles as unknown[]) ?? [];
+  const systems = (ir.system_touchpoints as unknown[]) ?? [];
+  const controls = (ir.controls as unknown[]) ?? [];
+
+  const stepCount = steps.length;
+  const roleList = roles
+    .slice(0, 3)
+    .map((r) => String((r as Record<string, unknown>).name ?? ""))
+    .filter(Boolean)
+    .join(", ");
+  const systemList = systems
+    .slice(0, 3)
+    .map((s) => String((s as Record<string, unknown>).system_name ?? ""))
+    .filter(Boolean)
+    .join(", ");
+
+  let summary = `This workflow describes the operational process`;
+  if (stepCount > 0) summary += ` across ${stepCount} steps`;
+  if (roleList) summary += `, involving ${roleList}`;
+  if (systemList) summary += ` and touching systems including ${systemList}`;
+  summary += ".";
+  if (controls.length > 0)
+    summary += ` ${controls.length} control${controls.length !== 1 ? "s" : ""} have been identified to govern this process.`;
+  return summary;
+}
+
+function deriveFindings(ir: Record<string, unknown>): string[] {
+  const findings: string[] = [];
+  const controls = (ir.controls as Array<Record<string, unknown>>) ?? [];
+  const exceptions = (ir.exception_flows as Array<Record<string, unknown>>) ?? [];
+  const decisions = (ir.decision_point_count as number) ?? 0;
+  const changes = (ir.change_events as Array<Record<string, unknown>>) ?? [];
+
+  controls.slice(0, 2).forEach((c) => {
+    const name = String(c.name ?? "");
+    if (name) findings.push(`Control identified: ${name}`);
+  });
+  if (exceptions.length > 0)
+    findings.push(`${exceptions.length} exception path${exceptions.length !== 1 ? "s" : ""} documented in this workflow`);
+  if (decisions > 0)
+    findings.push(`${decisions} decision point${decisions !== 1 ? "s" : ""} requiring approval or routing logic`);
+  changes.slice(0, 1).forEach((e) => {
+    const name = String(e.name ?? "");
+    if (name) findings.push(`Change event recorded: ${name}`);
+  });
+
+  if (findings.length === 0)
+    findings.push("Workflow structure extracted — review steps for accuracy");
+
+  return findings;
+}
+
+function deriveConfidenceScore(summary: Record<string, number> | null): number {
+  if (!summary) return 0;
+  const populated = Object.values(summary).filter((v) => v > 0).length;
+  const total = Object.keys(summary).length || 1;
+  return Math.round(50 + (populated / total) * 40);
+}
+
+// ---------------------------------------------------------------------------
+// Tabs
+// ---------------------------------------------------------------------------
+
+const TABS: { key: Tab; label: string }[] = [
+  { key: "narrative", label: "Narrative" },
+  { key: "workflow", label: "Workflow" },
+  { key: "sources", label: "Sources" },
+  { key: "insights", label: "Insights" },
+  { key: "activity", label: "Activity" },
+];
+
+// ---------------------------------------------------------------------------
+// Page
+// ---------------------------------------------------------------------------
+
+export default function WorkflowNarrativePage() {
   const params = useParams<{ id: string }>();
   const id = params?.id ?? "";
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<ProcessDetailResponse | null>(null);
+  const [tab, setTab] = useState<Tab>("narrative");
 
   useEffect(() => {
     if (!id) return;
     let cancelled = false;
-    async function load() {
-      try {
-        const result = await api.getProcess(id);
-        if (!cancelled) setData(result);
-      } catch (e) {
-        if (!cancelled)
-          setError(e instanceof Error ? e.message : "Failed to load process");
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    }
-    load();
-    return () => {
-      cancelled = true;
-    };
+    api.getProcess(id).then((d) => {
+      if (!cancelled) { setData(d); setLoading(false); }
+    }).catch((e) => {
+      if (!cancelled) { setError(e instanceof Error ? e.message : "Failed to load"); setLoading(false); }
+    });
+    return () => { cancelled = true; };
   }, [id]);
 
-  if (loading) return <div className="p-8 text-gray-500">Loading process…</div>;
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-full text-[var(--text-muted)] text-sm">
+        Loading workflow…
+      </div>
+    );
+  }
+
   if (error) {
     return (
       <div className="p-8">
-        <div className="bg-red-50 border border-red-200 text-red-700 p-4 rounded-lg">
+        <div className="card p-4 text-sm" style={{ color: "var(--danger)", borderColor: "var(--danger)" }}>
           {error}
         </div>
       </div>
     );
   }
+
   if (!data) return null;
 
   const ir = data.process_ir as Record<string, unknown> | null;
+  const summary = data.confidence_summary;
+  const workflowName = deriveWorkflowName(data);
+  const confidenceScore = deriveConfidenceScore(summary);
+  const narrativeSummary = ir ? deriveSummary(ir) : "No ProcessIR data available.";
+  const findings = ir ? deriveFindings(ir) : [];
+
+  const atAGlance = [
+    { label: "Steps", value: summary?.workflow_step_count ?? 0 },
+    { label: "Roles", value: summary?.role_count ?? 0 },
+    { label: "Systems", value: summary?.system_touchpoint_count ?? 0 },
+    { label: "Controls", value: summary?.control_count ?? 0 },
+  ];
 
   return (
-    <div className="p-6 max-w-4xl mx-auto">
-      {/* Header */}
-      <div className="mb-6">
-        <a
-          href="/processes"
-          className="text-xs text-gray-500 hover:text-gray-700"
-        >
-          ← All processes
-        </a>
-        <h1 className="text-2xl font-bold text-gray-900 mt-1">Process Details</h1>
-        <p className="text-xs text-gray-400 font-mono mt-0.5">{id}</p>
-        {data.schema_version && (
-          <p className="text-xs text-gray-500 mt-0.5">{data.schema_version}</p>
+    <div className="flex flex-col h-full">
+      {/* Dark top banner */}
+      <div
+        className="shrink-0 header-divider"
+        style={{ background: "var(--navy-850)" }}
+      >
+        {/* Breadcrumb + actions row */}
+        <div className="px-8 pt-5 pb-0 flex items-center justify-between gap-4">
+          <div className="flex items-center gap-1.5 text-[12px] text-white/40">
+            <Link href="/processes" className="hover:text-white/70 transition-colors">Workflows</Link>
+            <IconChevronRight />
+            <span className="text-white/70 truncate max-w-[200px]">{workflowName}</span>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-btn text-[12px] font-medium text-white/60 hover:text-white hover:bg-white/5 transition-colors border border-white/10">
+              <IconShare />
+              Share
+            </button>
+            <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-btn text-[12px] font-medium text-white/60 hover:text-white hover:bg-white/5 transition-colors border border-white/10">
+              <IconExport />
+              Export
+            </button>
+            <Link
+              href={`/processes/${id}/graph`}
+              className="flex items-center gap-1.5 px-4 py-1.5 rounded-btn text-[12px] font-semibold text-white transition-colors"
+              style={{ background: "var(--accent)" }}
+            >
+              Explore workflow
+            </Link>
+          </div>
+        </div>
+
+        {/* Title + meta + confidence */}
+        <div className="px-8 py-4 flex items-end justify-between gap-6">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 mb-1.5">
+              <h1 className="text-[22px] font-bold text-white leading-tight truncate">
+                {workflowName}
+              </h1>
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-white/10 text-white/60 border border-white/15 shrink-0">
+                Draft
+              </span>
+            </div>
+            <div className="flex items-center gap-4 text-[11px] text-white/40">
+              <span>Last updated: recently</span>
+              <span>Owner: Operations</span>
+              <span
+                className="px-2 py-0.5 rounded-full text-[10px] font-medium border"
+                style={{ color: "var(--warning)", borderColor: "rgba(245,158,11,0.3)", background: "rgba(245,158,11,0.1)" }}
+              >
+                In review
+              </span>
+            </div>
+          </div>
+          <div className="shrink-0">
+            <ConfidenceRing score={confidenceScore} />
+          </div>
+        </div>
+
+        {/* Tab strip */}
+        <div className="px-8 flex items-end gap-1 border-t border-white/5 mt-1">
+          {TABS.map((t) => (
+            <button
+              key={t.key}
+              onClick={() => setTab(t.key)}
+              className={[
+                "px-4 py-2.5 text-[13px] font-medium border-b-2 transition-colors",
+                tab === t.key
+                  ? "border-white text-white"
+                  : "border-transparent text-white/45 hover:text-white/70",
+              ].join(" ")}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Content */}
+      <div className="flex-1 overflow-y-auto bg-[var(--surface-soft)]">
+        {tab === "narrative" && (
+          <div className="flex gap-6 px-8 py-8 max-w-6xl">
+            {/* Left: narrative */}
+            <div className="flex-1 min-w-0 space-y-8">
+              <section>
+                <h2 className="text-[17px] font-semibold text-[var(--text-primary)] mb-3">
+                  Workflow summary
+                </h2>
+                <p className="text-[14px] text-[var(--text-secondary)] leading-relaxed">
+                  {narrativeSummary}
+                </p>
+                {ir && (
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    {["SOPs", "Email", "Forms"].map((tag) => (
+                      <span
+                        key={tag}
+                        className="px-2.5 py-1 text-[11px] font-medium rounded-full border"
+                        style={{ color: "var(--accent)", borderColor: "var(--accent-soft)", background: "var(--accent-soft)" }}
+                      >
+                        {tag}
+                      </span>
+                    ))}
+                  </div>
+                )}
+                <button className="mt-3 text-[12px] text-accent font-medium hover:text-accent-hover transition-colors">
+                  View all sources →
+                </button>
+              </section>
+
+              {findings.length > 0 && (
+                <section>
+                  <h2 className="text-[17px] font-semibold text-[var(--text-primary)] mb-3">
+                    Key findings
+                  </h2>
+                  <ol className="space-y-3">
+                    {findings.map((f, i) => (
+                      <li key={i} className="flex gap-3">
+                        <span
+                          className="w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-bold shrink-0 mt-0.5"
+                          style={{ background: "var(--accent-soft)", color: "var(--accent)" }}
+                        >
+                          {i + 1}
+                        </span>
+                        <p className="text-[13px] text-[var(--text-secondary)] leading-relaxed">{f}</p>
+                      </li>
+                    ))}
+                  </ol>
+                </section>
+              )}
+            </div>
+
+            {/* Right: at-a-glance + confidence + notes */}
+            <div className="w-64 shrink-0 space-y-4">
+              {/* At a glance */}
+              <div className="card p-4">
+                <h3 className="text-[12px] font-semibold text-[var(--text-muted)] uppercase tracking-wide mb-3">
+                  At a glance
+                </h3>
+                <div className="space-y-2.5">
+                  {atAGlance.map(({ label, value }) => (
+                    <div key={label} className="flex items-center justify-between">
+                      <span className="text-[13px] text-[var(--text-secondary)]">{label}</span>
+                      <span className="text-[13px] font-semibold text-[var(--text-primary)]">{value}</span>
+                    </div>
+                  ))}
+                </div>
+                <button className="mt-3 text-[12px] text-accent font-medium hover:text-accent-hover transition-colors">
+                  View all sources →
+                </button>
+              </div>
+
+              {/* Confidence */}
+              <div className="card p-4 flex flex-col items-center text-center gap-3">
+                <h3 className="text-[12px] font-semibold text-[var(--text-muted)] uppercase tracking-wide self-start">
+                  Confidence
+                </h3>
+                <ConfidenceRing score={confidenceScore} />
+                <p className="text-[11px] text-[var(--text-muted)]">
+                  Based on {Object.values(summary ?? {}).reduce((a, b) => a + b, 0)} data points
+                </p>
+                <button className="text-[11px] text-accent font-medium hover:text-accent-hover transition-colors">
+                  How confidence works
+                </button>
+              </div>
+
+              {/* Unresolved ambiguities */}
+              {ir && (
+                <div className="card p-4">
+                  <h3 className="text-[12px] font-semibold text-[var(--text-muted)] uppercase tracking-wide mb-3">
+                    Unresolved ambiguities
+                  </h3>
+                  <div className="space-y-2">
+                    {(ir.exception_flows as unknown[] ?? []).slice(0, 2).length > 0 ? (
+                      (ir.exception_flows as Array<Record<string, unknown>>).slice(0, 2).map((e, i) => (
+                        <div key={i} className="flex items-start gap-2 text-[12px] text-[var(--text-secondary)]">
+                          <span className="text-amber-500 mt-0.5"><IconAlertTriangle /></span>
+                          <span>{String(e.condition ?? e.name ?? "Exception path not fully defined")}</span>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="flex items-start gap-2 text-[12px] text-[var(--text-muted)]">
+                        <span className="text-emerald-500 mt-0.5"><IconCheckCircle /></span>
+                        <span>No critical ambiguities detected</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Recommended next steps */}
+              <div className="card p-4">
+                <h3 className="text-[12px] font-semibold text-[var(--text-muted)] uppercase tracking-wide mb-3">
+                  Recommended next steps
+                </h3>
+                <div className="space-y-2 text-[12px] text-[var(--text-secondary)]">
+                  <div className="flex items-start gap-2">
+                    <span className="text-emerald-500 mt-0.5"><IconCheckCircle /></span>
+                    <span>Review and validate extracted workflow steps</span>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <span className="text-emerald-500 mt-0.5"><IconCheckCircle /></span>
+                    <span>Standardize terminology across departments</span>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <span className="text-emerald-500 mt-0.5"><IconCheckCircle /></span>
+                    <span>
+                      <Link href={`/processes/${id}/graph`} className="text-accent hover:text-accent-hover font-medium">
+                        Explore workflow graph
+                      </Link>{" "}
+                      to verify structure
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {tab === "workflow" && (
+          <div className="flex flex-col items-center justify-center h-full gap-4 text-[var(--text-muted)]">
+            <p className="text-[14px]">Visualise the workflow structure in the graph view.</p>
+            <Link
+              href={`/processes/${id}/graph`}
+              className="px-5 py-2 rounded-btn text-[13px] font-semibold text-white transition-colors"
+              style={{ background: "var(--accent)" }}
+            >
+              Open workflow graph
+            </Link>
+          </div>
+        )}
+
+        {(tab === "sources" || tab === "insights" || tab === "activity") && (
+          <div className="flex items-center justify-center h-full text-[var(--text-muted)] text-[14px]">
+            {tab.charAt(0).toUpperCase() + tab.slice(1)} — coming soon
+          </div>
         )}
       </div>
-
-      {/* Navigation actions */}
-      <div className="flex gap-3 mb-6">
-        <a
-          href={`/processes/${id}/graph`}
-          className="px-4 py-2 bg-purple-600 text-white text-sm rounded-lg hover:bg-purple-700 transition-colors"
-        >
-          View Graph
-        </a>
-        <a
-          href={`/processes/${id}/timeline`}
-          className="px-4 py-2 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 transition-colors"
-        >
-          View Timeline
-        </a>
-        {data.run_id && (
-          <a
-            href={`/runs/${data.run_id}/review`}
-            className="px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors"
-          >
-            Review
-          </a>
-        )}
-      </div>
-
-      {/* Confidence summary */}
-      {data.confidence_summary && (
-        <ConfidenceSummary summary={data.confidence_summary} />
-      )}
-
-      {/* ProcessIR sections */}
-      {ir && (
-        <div className="space-y-4">
-          <ProcessIRSection
-            title="Workflow Steps"
-            items={(ir.workflow_steps as unknown[]) ?? []}
-            renderItem={(s: Record<string, unknown>) => (
-              <div>
-                <span className="font-medium text-gray-900">{String(s.name)}</span>
-                {Boolean(s.role) && (
-                  <span className="ml-2 text-xs text-green-600">
-                    Role: {String(s.role)}
-                  </span>
-                )}
-                {Boolean(s.system) && (
-                  <span className="ml-2 text-xs text-purple-600">
-                    System: {String(s.system)}
-                  </span>
-                )}
-                {s.sequence_order != null && (
-                  <span className="ml-2 text-xs text-gray-400">
-                    #{String(s.sequence_order)}
-                  </span>
-                )}
-              </div>
-            )}
-          />
-          <ProcessIRSection
-            title="Roles"
-            items={(ir.roles as unknown[]) ?? []}
-            renderItem={(r: Record<string, unknown>) => (
-              <span className="font-medium text-gray-900">{String(r.name)}</span>
-            )}
-          />
-          <ProcessIRSection
-            title="Systems"
-            items={(ir.system_touchpoints as unknown[]) ?? []}
-            renderItem={(t: Record<string, unknown>) => (
-              <div>
-                <span className="font-medium text-gray-900">
-                  {String(t.system_name)}
-                </span>
-                {Boolean(t.interaction_type) && (
-                  <span className="ml-2 text-xs text-gray-500">
-                    {String(t.interaction_type)}
-                  </span>
-                )}
-              </div>
-            )}
-          />
-          <ProcessIRSection
-            title="Controls"
-            items={(ir.controls as unknown[]) ?? []}
-            renderItem={(c: Record<string, unknown>) => (
-              <div>
-                <span className="font-medium text-gray-900">{String(c.name)}</span>
-                {Boolean(c.control_type) && (
-                  <span className="ml-2 text-xs text-yellow-600">
-                    {String(c.control_type)}
-                  </span>
-                )}
-              </div>
-            )}
-          />
-          <ProcessIRSection
-            title="Change Events"
-            items={(ir.change_events as unknown[]) ?? []}
-            renderItem={(e: Record<string, unknown>) => (
-              <span className="font-medium text-gray-900">{String(e.name)}</span>
-            )}
-          />
-        </div>
-      )}
-
-      {!ir && (
-        <div className="text-gray-500 text-sm">
-          No ProcessIR data available for this process.
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Reusable section component
-// ---------------------------------------------------------------------------
-
-function ProcessIRSection({
-  title,
-  items,
-  renderItem,
-}: {
-  title: string;
-  items: unknown[];
-  renderItem: (item: Record<string, unknown>) => React.ReactNode;
-}) {
-  if (items.length === 0) return null;
-  return (
-    <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
-      <div className="px-4 py-3 bg-gray-50 border-b border-gray-200 flex items-center justify-between">
-        <h3 className="text-sm font-semibold text-gray-700">{title}</h3>
-        <span className="text-xs text-gray-400">{items.length}</span>
-      </div>
-      <ul className="divide-y divide-gray-100">
-        {items.map((item, i) => (
-          <li key={i} className="px-4 py-2.5 text-sm text-gray-800">
-            {renderItem(item as Record<string, unknown>)}
-          </li>
-        ))}
-      </ul>
     </div>
   );
 }
