@@ -5,7 +5,75 @@ import Link from "next/link";
 import { api, ProcessSummaryResponse, ProcessGroupsResponse } from "@/lib/api";
 
 // ---------------------------------------------------------------------------
-// Confidence badge
+// Review queue helpers
+// ---------------------------------------------------------------------------
+
+type ReviewCategory = "needs_review" | "in_progress" | "failed" | "pending";
+
+function reviewCategory(p: ProcessSummaryResponse): ReviewCategory {
+  if (p.extraction_status === "completed") return "needs_review";
+  if (p.extraction_status === "failed") return "failed";
+  if (p.extraction_status === "processing") return "in_progress";
+  return "pending";
+}
+
+const REVIEW_CATEGORY_LABELS: Record<ReviewCategory, string> = {
+  needs_review: "Needs review",
+  in_progress: "Processing",
+  failed: "Failed",
+  pending: "Pending",
+};
+
+const REVIEW_CATEGORY_COLORS: Record<ReviewCategory, string> = {
+  needs_review: "bg-blue-50 text-blue-700 border-blue-200",
+  in_progress: "bg-yellow-50 text-yellow-700 border-yellow-200",
+  failed: "bg-red-50 text-red-700 border-red-200",
+  pending: "bg-gray-50 text-gray-500 border-gray-200",
+};
+
+// ---------------------------------------------------------------------------
+// Review queue summary panel
+// ---------------------------------------------------------------------------
+
+function ReviewQueueSummary({ processes }: { processes: ProcessSummaryResponse[] }) {
+  const byCategory = processes.reduce<Record<ReviewCategory, number>>(
+    (acc, p) => { acc[reviewCategory(p)]++; return acc; },
+    { needs_review: 0, in_progress: 0, failed: 0, pending: 0 }
+  );
+  const needsReview = byCategory.needs_review;
+
+  if (processes.length === 0) return null;
+
+  return (
+    <div className="border border-blue-200 bg-blue-50 rounded-lg p-4 mb-5">
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h2 className="text-sm font-semibold text-blue-900 mb-0.5">
+            Review queue
+          </h2>
+          <p className="text-xs text-blue-700">
+            {needsReview > 0
+              ? `${needsReview} process${needsReview !== 1 ? "es" : ""} ready for human review.`
+              : "No processes currently awaiting review."}
+          </p>
+        </div>
+        <div className="flex gap-3 shrink-0">
+          {(Object.entries(byCategory) as [ReviewCategory, number][])
+            .filter(([, count]) => count > 0)
+            .map(([cat, count]) => (
+              <div key={cat} className="text-center">
+                <div className="text-lg font-bold text-blue-900">{count}</div>
+                <div className="text-[10px] text-blue-600">{REVIEW_CATEGORY_LABELS[cat]}</div>
+              </div>
+            ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Extraction status badge
 // ---------------------------------------------------------------------------
 
 function StatusBadge({ status }: { status: string }) {
@@ -84,12 +152,15 @@ function GroupsPanel({ groups }: { groups: ProcessGroupsResponse["groups"] }) {
 // Main dashboard
 // ---------------------------------------------------------------------------
 
+type CategoryFilter = "all" | ReviewCategory;
+
 export default function ProcessDashboard() {
   const [processes, setProcesses] = useState<ProcessSummaryResponse[]>([]);
   const [groups, setGroups] = useState<ProcessGroupsResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>("all");
 
   useEffect(() => {
     let cancelled = false;
@@ -100,6 +171,9 @@ export default function ProcessDashboard() {
           api.getProcessGroups(),
         ]);
         if (!cancelled) {
+          // Sort: needs_review first, then in_progress, then others
+          const ORDER: ReviewCategory[] = ["needs_review", "in_progress", "pending", "failed"];
+          procs.sort((a, b) => ORDER.indexOf(reviewCategory(a)) - ORDER.indexOf(reviewCategory(b)));
           setProcesses(procs);
           setGroups(grps);
         }
@@ -115,11 +189,11 @@ export default function ProcessDashboard() {
     };
   }, []);
 
-  // Simple filename/schema filter
+  // Filter by text and category
   const filtered = processes.filter((p) => {
-    if (!filter) return true;
-    const text = `${p.filename ?? ""} ${p.schema_version ?? ""}`.toLowerCase();
-    return text.includes(filter.toLowerCase());
+    const textMatch = !filter || `${p.filename ?? ""} ${p.schema_version ?? ""}`.toLowerCase().includes(filter.toLowerCase());
+    const catMatch = categoryFilter === "all" || reviewCategory(p) === categoryFilter;
+    return textMatch && catMatch;
   });
 
   if (loading) {
@@ -148,11 +222,34 @@ export default function ProcessDashboard() {
         </p>
       </div>
 
+      {/* Review queue summary */}
+      <ReviewQueueSummary processes={processes} />
+
       {/* Similarity groups panel */}
       {groups && <GroupsPanel groups={groups.groups} />}
 
-      {/* Filter */}
-      <div className="mb-4">
+      {/* Category filter tabs + text filter */}
+      <div className="mb-4 space-y-3">
+        <div className="flex items-center gap-1.5 flex-wrap">
+          {(["all", "needs_review", "in_progress", "failed", "pending"] as CategoryFilter[]).map((cat) => {
+            const count = cat === "all" ? processes.length : processes.filter((p) => reviewCategory(p) === cat).length;
+            if (count === 0 && cat !== "all") return null;
+            return (
+              <button
+                key={cat}
+                onClick={() => setCategoryFilter(cat)}
+                className={[
+                  "text-xs px-3 py-1 rounded-full border font-medium transition-colors",
+                  categoryFilter === cat
+                    ? "bg-blue-600 text-white border-blue-600"
+                    : "bg-white text-gray-600 border-gray-300 hover:border-blue-300",
+                ].join(" ")}
+              >
+                {cat === "all" ? "All" : REVIEW_CATEGORY_LABELS[cat]} ({count})
+              </button>
+            );
+          })}
+        </div>
         <input
           type="text"
           placeholder="Filter by filename or schema…"
@@ -174,11 +271,19 @@ export default function ProcessDashboard() {
             >
               <div className="flex items-start justify-between gap-4">
                 <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2 mb-1">
+                  <div className="flex items-center gap-2 mb-1 flex-wrap">
                     <span className="font-medium text-gray-900 truncate">
                       {p.filename ?? "Unnamed process"}
                     </span>
                     <StatusBadge status={p.extraction_status} />
+                    {(() => {
+                      const cat = reviewCategory(p);
+                      return (
+                        <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-medium border ${REVIEW_CATEGORY_COLORS[cat]}`}>
+                          {REVIEW_CATEGORY_LABELS[cat]}
+                        </span>
+                      );
+                    })()}
                   </div>
                   <div className="text-xs text-gray-500 font-mono truncate">
                     {p.extraction_result_id}
@@ -213,6 +318,14 @@ export default function ProcessDashboard() {
                   >
                     Explain
                   </Link>
+                  {p.extraction_status === "completed" && (
+                    <Link
+                      href={`/runs/${p.run_id}/review`}
+                      className="text-xs px-2 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors font-medium"
+                    >
+                      Review
+                    </Link>
+                  )}
                 </div>
               </div>
             </div>
