@@ -1,16 +1,20 @@
 """Process exploration endpoints.
 
 Routes:
-  GET /processes              — list all completed extraction results (process candidates)
-  GET /processes/groups       — list similarity-based process groups
-  GET /processes/{id}         — retrieve structured metadata for a single process
-  GET /processes/{id}/timeline — retrieve change timeline for a process
-  GET /processes/{id}/graph   — retrieve React Flow workflow graph for a process
+  GET /processes                              — list all completed extraction results
+  GET /processes/groups                       — list similarity-based process groups
+  GET /processes/{id}                         — retrieve structured ProcessIR metadata
+  GET /processes/{id}/timeline               — retrieve change timeline for a process
+  GET /processes/{id}/graph                  — retrieve React Flow workflow graph
+  GET /processes/{id}/explanations           — full entity/edge/confidence/lineage explanations
+  GET /processes/{id}/similarity-explanations — similarity explanations vs other processes
+  GET /processes/{id}/graph/explanations     — edge-level explanations for the workflow graph
 
 All endpoints return structured ProcessIR-derived data only.
 No raw customer content is exposed.
 """
 
+import dataclasses
 import json
 from typing import Any, Optional
 from uuid import UUID
@@ -23,11 +27,16 @@ from packages.core.database.repository import (
     list_extraction_results,
 )
 from packages.core.database.session import get_connection
+from packages.core.process_ir.explainability import (
+    explain_process,
+    explain_similarity,
+)
 from packages.core.process_ir.graph import project_graph
 from packages.core.process_ir.lineage import build_timeline, build_timeline_summary
 from packages.core.process_ir.similarity import (
     cluster_processes,
     make_fingerprint,
+    score_similarity,
 )
 from packages.core.schemas.process_ir import ProcessIR
 
@@ -101,6 +110,41 @@ class ProcessGroupsResponse(BaseModel):
 
     groups: list[ProcessGroupResponse]
     singleton_count: int  # groups with only one process
+
+
+class ProcessExplanationResponse(BaseModel):
+    """Full explainability bundle for a ProcessIR instance."""
+
+    extraction_result_id: UUID
+    process_id: str
+    schema_version: str
+    entity_explanations: list[dict[str, Any]]
+    edge_explanations: list[dict[str, Any]]
+    confidence_decomposition: Optional[dict[str, Any]] = None
+    evidence_lineage: Optional[dict[str, Any]] = None
+
+
+class SimilarityExplanationItem(BaseModel):
+    """Similarity explanation between the target process and one other process."""
+
+    other_extraction_result_id: str
+    explanation: dict[str, Any]
+
+
+class SimilarityExplanationsResponse(BaseModel):
+    """All similarity explanations for a process vs its closest neighbours."""
+
+    extraction_result_id: UUID
+    process_id: str
+    comparisons: list[SimilarityExplanationItem]
+
+
+class GraphExplanationsResponse(BaseModel):
+    """Edge-level explanations for a workflow graph."""
+
+    extraction_result_id: UUID
+    process_id: str
+    edge_explanations: list[dict[str, Any]]
 
 
 # ---------------------------------------------------------------------------
@@ -380,4 +424,172 @@ def get_process_graph(extraction_result_id: UUID) -> GraphResponse:
     return GraphResponse(
         extraction_result_id=extraction_result_id,
         graph=graph.to_react_flow(),
+    )
+
+
+# ---------------------------------------------------------------------------
+# Explainability endpoints
+# ---------------------------------------------------------------------------
+
+
+def _require_process_ir(extraction_result_id: UUID) -> tuple[Any, ProcessIR]:
+    """Shared helper: fetch DB row and parsed ProcessIR or raise HTTP errors."""
+    with get_connection() as conn:
+        row = get_extraction_result_by_id(conn, extraction_result_id)
+
+    if row is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Process {extraction_result_id} not found",
+        )
+
+    process_ir_uri = row.get("process_ir_uri")
+    if not process_ir_uri:
+        raise HTTPException(
+            status_code=404,
+            detail=f"No ProcessIR artifact found for process {extraction_result_id}",
+        )
+
+    data = _download_process_ir(process_ir_uri)
+    if not data:
+        raise HTTPException(
+            status_code=503,
+            detail="ProcessIR artifact unavailable",
+        )
+
+    pir = _parse_process_ir(data)
+    if not pir:
+        raise HTTPException(
+            status_code=422,
+            detail="ProcessIR artifact could not be parsed",
+        )
+
+    return row, pir
+
+
+@router.get(
+    "/{extraction_result_id}/explanations",
+    response_model=ProcessExplanationResponse,
+)
+def get_process_explanations(
+    extraction_result_id: UUID,
+) -> ProcessExplanationResponse:
+    """Return a full explainability bundle for a process candidate.
+
+    Includes entity explanations, edge explanations, confidence decomposition,
+    and evidence lineage summary. No raw customer content is returned.
+    """
+    _, pir = _require_process_ir(extraction_result_id)
+    explanation = explain_process(pir)
+
+    return ProcessExplanationResponse(
+        extraction_result_id=extraction_result_id,
+        process_id=explanation.process_id,
+        schema_version=explanation.schema_version,
+        entity_explanations=[
+            dataclasses.asdict(e) for e in explanation.entity_explanations
+        ],
+        edge_explanations=[
+            dataclasses.asdict(e) for e in explanation.edge_explanations
+        ],
+        confidence_decomposition=(
+            dataclasses.asdict(explanation.confidence_decomposition)
+            if explanation.confidence_decomposition
+            else None
+        ),
+        evidence_lineage=(
+            dataclasses.asdict(explanation.evidence_lineage)
+            if explanation.evidence_lineage
+            else None
+        ),
+    )
+
+
+@router.get(
+    "/{extraction_result_id}/similarity-explanations",
+    response_model=SimilarityExplanationsResponse,
+)
+def get_similarity_explanations(
+    extraction_result_id: UUID,
+    limit: int = Query(default=20, ge=1, le=100),
+    min_score: float = Query(default=0.30, ge=0.0, le=1.0),
+) -> SimilarityExplanationsResponse:
+    """Return similarity explanations between this process and its closest neighbours.
+
+    Downloads up to `limit` other ProcessIR artifacts, computes pairwise
+    similarity, and returns enriched explanations for pairs scoring above
+    `min_score`.  No raw customer content is returned.
+    """
+    _, pir = _require_process_ir(extraction_result_id)
+    fp_target = make_fingerprint(pir)
+
+    # Load candidate processes for comparison
+    with get_connection() as conn:
+        rows = list_extraction_results(conn, limit=limit + 1)
+
+    comparisons: list[SimilarityExplanationItem] = []
+    for row in rows:
+        rid = str(row["extraction_result_id"])
+        if rid == str(extraction_result_id):
+            continue
+        uri = row.get("process_ir_uri")
+        if not uri:
+            continue
+        data = _download_process_ir(uri)
+        if not data:
+            continue
+        other_pir = _parse_process_ir(data)
+        if not other_pir:
+            continue
+
+        fp_other = make_fingerprint(other_pir)
+        sim_score = score_similarity(fp_target, fp_other)
+
+        if sim_score.score < min_score:
+            continue
+
+        sim_explanation = explain_similarity(sim_score)
+        comparisons.append(
+            SimilarityExplanationItem(
+                other_extraction_result_id=rid,
+                explanation=dataclasses.asdict(sim_explanation),
+            )
+        )
+
+    # Sort by composite score descending
+    comparisons.sort(
+        key=lambda c: c.explanation.get("composite_score", 0.0),
+        reverse=True,
+    )
+
+    return SimilarityExplanationsResponse(
+        extraction_result_id=extraction_result_id,
+        process_id=pir.id,
+        comparisons=comparisons,
+    )
+
+
+@router.get(
+    "/{extraction_result_id}/graph/explanations",
+    response_model=GraphExplanationsResponse,
+)
+def get_graph_explanations(
+    extraction_result_id: UUID,
+) -> GraphExplanationsResponse:
+    """Return edge-level explanations for the workflow graph of a process.
+
+    Explains why each edge exists — whether it was derived from sequence order,
+    role assignment, system assignment, or a positional control heuristic.
+    No raw customer content is returned.
+    """
+    _, pir = _require_process_ir(extraction_result_id)
+    graph = project_graph(pir)
+    explanation = explain_process(pir, graph=graph)
+
+    return GraphExplanationsResponse(
+        extraction_result_id=extraction_result_id,
+        process_id=pir.id,
+        edge_explanations=[
+            dataclasses.asdict(e) for e in explanation.edge_explanations
+        ],
     )
