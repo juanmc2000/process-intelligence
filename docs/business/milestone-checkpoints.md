@@ -445,6 +445,64 @@ tab to the workflow narrative, and defining admin API contracts for future gover
 
 ---
 
+## Sprint 8A — Explainability, Evidence Provenance, and Review Queue Foundations
+
+**Goal:** Make extraction results trustworthy and inspectable. Analysts can see exactly
+why workflows were extracted as they were, what evidence supports each finding, and which
+workflows require human review. All explainability logic is deterministic and traceable.
+
+### PROCESS-005 — Extraction explainability engine
+
+- [x] Entity explanations exist (evidence count, confidence tier, rationale)
+- [x] Edge explanations exist (basis and rationale per graph edge)
+- [x] Confidence decomposition exists (per-dimension breakdown with weights)
+- [x] Evidence lineage summaries exist (coverage ratio, well-evidenced labels, unevidenced types)
+- [x] Similarity explanations exist (enriched from SimilarityScore with verdicts)
+- [x] Full `ProcessExplanation` bundle via `explain_process()`
+- [x] All logic is deterministic — no LLM calls, no fabrication
+
+### API-010A — Explainability API endpoints
+
+- [x] `GET /processes/{id}/explanations` — full entity/edge/confidence/lineage bundle
+- [x] `GET /processes/{id}/similarity-explanations` — pairwise similarity explanations
+- [x] `GET /processes/{id}/graph/explanations` — edge-level workflow graph rationale
+- [x] Existing APIs remain stable
+
+### UI-017 — Explainability panel and evidence reasoning UX
+
+- [x] Explanations tab on narrative page with confidence decomposition, lineage, entity list
+- [x] Edge reasoning panel in graph page right sidebar
+- [x] Enhanced similarity groups panel on processes list
+- [x] `?tab=explanations` URL param for direct navigation
+- [x] Existing pages remain stable
+
+### REVIEW-003A — Review queue prioritization foundations
+
+- [x] Review queue summary panel (counts by category)
+- [x] Category filter tabs (Needs review / Processing / Failed / Pending)
+- [x] Per-process review category badge
+- [x] Process list sorted by review priority
+- [x] Review button on completed processes linking to `/runs/{run_id}/review`
+
+### TEST-007A — Explainability and workflow testing fixtures
+
+- [x] 40 unit tests for explainability engine
+- [x] 31 integration tests across 5 synthetic workflow archetypes
+- [x] Synthetic operational datasets: invoice approval, PO escalation, payment dispute,
+      system outage fallback, informal/sparse workflow
+- [x] Negative tests prevent fabricated evidence and over-reporting
+- [x] 328 total tests pass (257 pre-Sprint-8A + 71 new)
+
+### DOC-009A — Explainability and testing-readiness ADR
+
+- [x] ADR-005 documents explainability philosophy and architecture
+- [x] Testing-readiness and synthetic dataset strategy documented
+- [x] Review queue prioritization documented
+- [x] Current limitations documented
+- [x] Sprint 8A milestone checkpoints added
+
+---
+
 ## Definition of Done (per Sprint)
 
 All checkpoints for the sprint pass. The smoke test suite runs green against
