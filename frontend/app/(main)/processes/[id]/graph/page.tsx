@@ -15,7 +15,7 @@ import ReactFlow, {
   BackgroundVariant,
 } from "reactflow";
 import "reactflow/dist/style.css";
-import { api, GraphResponse, ProcessDetailResponse } from "@/lib/api";
+import { api, GraphExplanationsResponse, GraphResponse, ProcessDetailResponse } from "@/lib/api";
 
 // ---------------------------------------------------------------------------
 // Node colour palette (tuned for dark canvas)
@@ -212,6 +212,7 @@ export default function SpatialWorkflowPage() {
   });
 
   const [confidenceSummary, setConfidenceSummary] = useState<Record<string, number> | null>(null);
+  const [graphExplanations, setGraphExplanations] = useState<GraphExplanationsResponse | null>(null);
 
   // Canonical full node/edge sets — source of truth for filtering.
   const allNodesRef = useRef<Node[]>([]);
@@ -236,11 +237,15 @@ export default function SpatialWorkflowPage() {
     Promise.all([
       api.getProcessGraph(id),
       api.getProcess(id).catch(() => null as ProcessDetailResponse | null),
-    ]).then(([graphResult, processResult]) => {
+      api.getGraphExplanations(id).catch(() => null as GraphExplanationsResponse | null),
+    ]).then(([graphResult, processResult, explanationResult]) => {
       if (cancelled) return;
       setGraphData(graphResult);
       if (processResult?.confidence_summary) {
         setConfidenceSummary(processResult.confidence_summary as Record<string, number>);
+      }
+      if (explanationResult) {
+        setGraphExplanations(explanationResult);
       }
       const rfNodes: Node[] = graphResult.graph.nodes.map((n) => ({
         id: n.id,
@@ -535,6 +540,23 @@ export default function SpatialWorkflowPage() {
               </div>
             )}
           </div>
+
+          {/* Edge reasoning */}
+          {graphExplanations && graphExplanations.edge_explanations.length > 0 && (
+            <div className="p-4 border-t border-white/5">
+              <h3 className="text-[13px] font-semibold text-white mb-3">Edge reasoning</h3>
+              <div className="space-y-3 max-h-64 overflow-y-auto">
+                {graphExplanations.edge_explanations.map((e) => (
+                  <div key={e.edge_id} className="space-y-0.5">
+                    <div className="text-[11px] text-white/60 font-medium truncate">
+                      {e.source_label} → {e.target_label}
+                    </div>
+                    <div className="text-[10px] text-white/30 italic leading-snug">{e.rationale}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>

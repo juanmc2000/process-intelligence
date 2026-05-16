@@ -1,15 +1,21 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { api, ProcessDetailResponse, RunDetailResponse, SourceResponse } from "@/lib/api";
+import {
+  api,
+  ProcessDetailResponse,
+  ProcessExplanationResponse,
+  RunDetailResponse,
+  SourceResponse,
+} from "@/lib/api";
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
-type Tab = "narrative" | "workflow" | "sources" | "insights" | "activity";
+type Tab = "narrative" | "workflow" | "sources" | "explanations" | "insights" | "activity";
 
 // ---------------------------------------------------------------------------
 // Icons
@@ -359,6 +365,195 @@ function SourcesTab({ runDetail, loadingRun }: { runDetail: RunDetailResponse | 
 }
 
 // ---------------------------------------------------------------------------
+// Explainability tab
+// ---------------------------------------------------------------------------
+
+const TIER_COLORS: Record<string, string> = {
+  high: "text-emerald-600 bg-emerald-50 border-emerald-200",
+  medium: "text-amber-600 bg-amber-50 border-amber-200",
+  low: "text-orange-600 bg-orange-50 border-orange-200",
+  unverified: "text-[var(--text-muted)] bg-[var(--surface-soft)] border-[var(--border-soft)]",
+};
+
+function ExplanationsTab({
+  id,
+  explanation,
+  loading,
+}: {
+  id: string;
+  explanation: ProcessExplanationResponse | null;
+  loading: boolean;
+}) {
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-40 text-[var(--text-muted)] text-[13px]">
+        Loading explanations…
+      </div>
+    );
+  }
+
+  if (!explanation) {
+    return (
+      <div className="flex flex-col items-center justify-center h-40 gap-3 text-[var(--text-muted)]">
+        <p className="text-[13px] italic">Explanations unavailable — ProcessIR may not be ready.</p>
+        <Link href={`/processes/${id}/graph`} className="text-[12px] text-accent font-medium">
+          Open workflow graph →
+        </Link>
+      </div>
+    );
+  }
+
+  const { confidence_decomposition: cd, evidence_lineage: el, entity_explanations: ee } = explanation;
+
+  return (
+    <div className="px-8 py-8 max-w-5xl space-y-8">
+
+      {/* Confidence decomposition */}
+      {cd && (
+        <section>
+          <h2 className="text-[15px] font-semibold text-[var(--text-primary)] mb-1">
+            Confidence decomposition
+          </h2>
+          <p className="text-[12px] text-[var(--text-muted)] mb-4">{cd.rationale}</p>
+          <div className="space-y-2">
+            {cd.dimensions.map((dim) => (
+              <div key={dim.name} className="card p-3 flex items-center gap-4">
+                <div className="flex items-center gap-2 w-44 shrink-0">
+                  <span
+                    className={`w-2 h-2 rounded-full shrink-0 ${dim.present ? "bg-emerald-500" : "bg-[var(--border-strong)]"}`}
+                  />
+                  <span className="text-[12px] font-medium text-[var(--text-secondary)]">
+                    {dim.display_name}
+                  </span>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="h-1.5 bg-[var(--border-soft)] rounded-full overflow-hidden">
+                    <div
+                      className="h-full rounded-full transition-all"
+                      style={{
+                        width: `${dim.present ? Math.min(100, (dim.count / 10) * 100) : 0}%`,
+                        background: "var(--accent)",
+                      }}
+                    />
+                  </div>
+                </div>
+                <span className="text-[12px] font-semibold text-[var(--text-primary)] w-6 text-right shrink-0">
+                  {dim.count}
+                </span>
+                <span className="text-[11px] text-[var(--text-muted)] shrink-0 w-24 text-right">
+                  {(dim.weight * 100).toFixed(0)}% weight
+                </span>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* Evidence lineage */}
+      {el && (
+        <section>
+          <h2 className="text-[15px] font-semibold text-[var(--text-primary)] mb-1">
+            Evidence lineage
+          </h2>
+          <p className="text-[12px] text-[var(--text-muted)] mb-4">{el.lineage_note}</p>
+          <div className="grid grid-cols-3 gap-3 mb-4">
+            {[
+              { label: "Total evidence refs", value: el.total_evidence_refs },
+              { label: "Entities with evidence", value: `${el.entities_with_evidence} / ${el.total_entities}` },
+              { label: "Coverage", value: `${Math.round(el.coverage_ratio * 100)}%` },
+            ].map(({ label, value }) => (
+              <div key={label} className="card p-3 text-center">
+                <div className="text-[20px] font-bold text-[var(--text-primary)]">{value}</div>
+                <div className="text-[11px] text-[var(--text-muted)] mt-0.5">{label}</div>
+              </div>
+            ))}
+          </div>
+          {el.well_evidenced_entity_labels.length > 0 && (
+            <div className="mb-3">
+              <span className="text-[11px] font-semibold text-[var(--text-muted)] uppercase tracking-wide">
+                Well-evidenced
+              </span>
+              <div className="flex flex-wrap gap-1.5 mt-1.5">
+                {el.well_evidenced_entity_labels.slice(0, 10).map((label) => (
+                  <span
+                    key={label}
+                    className="px-2 py-0.5 rounded-full text-[11px] border"
+                    style={{ color: "var(--accent)", borderColor: "var(--accent-soft)", background: "var(--accent-soft)" }}
+                  >
+                    {label}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+          {el.unevidenced_entity_types.length > 0 && (
+            <div>
+              <span className="text-[11px] font-semibold text-[var(--text-muted)] uppercase tracking-wide">
+                No evidence for
+              </span>
+              <div className="flex flex-wrap gap-1.5 mt-1.5">
+                {el.unevidenced_entity_types.map((t) => (
+                  <span
+                    key={t}
+                    className="px-2 py-0.5 rounded-full text-[11px] border text-amber-600 bg-amber-50 border-amber-200"
+                  >
+                    {t.replace(/_/g, " ")}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+        </section>
+      )}
+
+      {/* Entity explanations */}
+      {ee.length > 0 && (
+        <section>
+          <h2 className="text-[15px] font-semibold text-[var(--text-primary)] mb-4">
+            Entity explanations
+          </h2>
+          <div className="space-y-2">
+            {ee.map((e) => (
+              <div key={e.entity_id} className="card p-3 flex items-start gap-3">
+                <span
+                  className={`px-2 py-0.5 rounded text-[10px] font-semibold border shrink-0 mt-0.5 ${TIER_COLORS[e.confidence_tier] ?? TIER_COLORS.unverified}`}
+                >
+                  {e.confidence_tier}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-baseline gap-2 flex-wrap">
+                    <span className="text-[13px] font-medium text-[var(--text-primary)]">{e.label}</span>
+                    <span
+                      className="text-[10px] px-1.5 py-0.5 rounded border"
+                      style={{ color: "var(--text-muted)", borderColor: "var(--border-soft)", background: "var(--surface-soft)" }}
+                    >
+                      {e.entity_type.replace(/_/g, " ")}
+                    </span>
+                  </div>
+                  <p className="text-[12px] text-[var(--text-muted)] mt-0.5 leading-snug">{e.rationale}</p>
+                  {e.evidence_locations.length > 0 && (
+                    <p className="text-[11px] text-[var(--text-muted)] mt-1 italic">
+                      Locations: {e.evidence_locations.slice(0, 3).join(", ")}
+                    </p>
+                  )}
+                </div>
+                <span className="text-[11px] text-[var(--text-muted)] shrink-0">
+                  {e.evidence_count} ref{e.evidence_count !== 1 ? "s" : ""}
+                </span>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      <p className="text-[11px] text-[var(--text-muted)] italic">
+        Explanations are derived deterministically from extracted process structure — no AI reasoning.
+      </p>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Tabs
 // ---------------------------------------------------------------------------
 
@@ -366,6 +561,7 @@ const TABS: { key: Tab; label: string }[] = [
   { key: "narrative", label: "Narrative" },
   { key: "workflow", label: "Workflow" },
   { key: "sources", label: "Sources" },
+  { key: "explanations", label: "Explanations" },
   { key: "insights", label: "Insights" },
   { key: "activity", label: "Activity" },
 ];
@@ -376,14 +572,19 @@ const TABS: { key: Tab; label: string }[] = [
 
 export default function WorkflowNarrativePage() {
   const params = useParams<{ id: string }>();
+  const searchParams = useSearchParams();
   const id = params?.id ?? "";
+
+  const initialTab = (searchParams?.get("tab") as Tab | null) ?? "narrative";
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<ProcessDetailResponse | null>(null);
   const [runDetail, setRunDetail] = useState<RunDetailResponse | null>(null);
   const [loadingRun, setLoadingRun] = useState(false);
-  const [tab, setTab] = useState<Tab>("narrative");
+  const [explanation, setExplanation] = useState<ProcessExplanationResponse | null>(null);
+  const [loadingExplanation, setLoadingExplanation] = useState(false);
+  const [tab, setTab] = useState<Tab>(initialTab);
 
   useEffect(() => {
     if (!id) return;
@@ -398,6 +599,13 @@ export default function WorkflowNarrativePage() {
           if (!cancelled) { setRunDetail(r); setLoadingRun(false); }
         }).catch(() => {
           if (!cancelled) setLoadingRun(false);
+        });
+        // Fetch explanations
+        setLoadingExplanation(true);
+        api.getProcessExplanations(id).then((exp) => {
+          if (!cancelled) { setExplanation(exp); setLoadingExplanation(false); }
+        }).catch(() => {
+          if (!cancelled) setLoadingExplanation(false);
         });
       }
     }).catch((e) => {
@@ -660,6 +868,10 @@ export default function WorkflowNarrativePage() {
 
         {tab === "sources" && (
           <SourcesTab runDetail={runDetail} loadingRun={loadingRun} />
+        )}
+
+        {tab === "explanations" && (
+          <ExplanationsTab id={id} explanation={explanation} loading={loadingExplanation} />
         )}
 
         {(tab === "insights" || tab === "activity") && (
