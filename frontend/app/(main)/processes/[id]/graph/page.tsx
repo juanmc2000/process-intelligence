@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import ReactFlow, {
@@ -115,13 +115,27 @@ function IconSparkle() {
 // Layer toggle
 // ---------------------------------------------------------------------------
 
-type LayerKey = "departments" | "systems" | "approvals" | "exceptions";
+type LayerKey = "departments" | "systems" | "approvals" | "exceptions" | "controls" | "roles";
 
 const LAYER_LABELS: Record<LayerKey, string> = {
   departments: "Departments",
   systems: "Systems",
   approvals: "Approvals",
   exceptions: "Exceptions",
+  controls: "Controls",
+  roles: "Roles",
+};
+
+// Maps each ReactFlow node type to the layer that controls its visibility.
+// Node types not listed here are always visible.
+const NODE_TYPE_LAYER: Partial<Record<string, LayerKey>> = {
+  workflow_step: "departments",
+  handoff: "departments",
+  system: "systems",
+  decision: "approvals",
+  exception: "exceptions",
+  control: "controls",
+  role: "roles",
 };
 
 // ---------------------------------------------------------------------------
@@ -193,9 +207,27 @@ export default function SpatialWorkflowPage() {
     systems: true,
     approvals: true,
     exceptions: true,
+    controls: true,
+    roles: true,
   });
 
   const [confidenceSummary, setConfidenceSummary] = useState<Record<string, number> | null>(null);
+
+  // Canonical full node/edge sets — source of truth for filtering.
+  const allNodesRef = useRef<Node[]>([]);
+  const allEdgesRef = useRef<Edge[]>([]);
+
+  // Compute which node IDs are visible given current layer toggles.
+  function getVisibleNodeIds(allNodes: Node[], activeLayers: Record<LayerKey, boolean>): Set<string> {
+    const ids = new Set<string>();
+    for (const n of allNodes) {
+      const layer = NODE_TYPE_LAYER[n.type ?? ""];
+      if (!layer || activeLayers[layer]) {
+        ids.add(n.id);
+      }
+    }
+    return ids;
+  }
 
   useEffect(() => {
     if (!id) return;
@@ -227,6 +259,8 @@ export default function SpatialWorkflowPage() {
         labelStyle: { fontSize: 10, fill: "#94a3b8", fontWeight: 500 },
         labelBgStyle: { fill: "#0f1d33", fillOpacity: 0.8 },
       }));
+      allNodesRef.current = rfNodes;
+      allEdgesRef.current = rfEdges;
       setNodes(rfNodes);
       setEdges(rfEdges);
       setLoading(false);
@@ -238,6 +272,16 @@ export default function SpatialWorkflowPage() {
 
   const confidenceScore = deriveConfidenceScore(confidenceSummary);
   const confidenceLabel = deriveConfidenceLabel(confidenceScore);
+
+  // Re-filter whenever layer toggles change, preserving zoom/pan state.
+  useEffect(() => {
+    if (allNodesRef.current.length === 0) return;
+    const visibleIds = getVisibleNodeIds(allNodesRef.current, layers);
+    setNodes(allNodesRef.current.filter((n) => visibleIds.has(n.id)));
+    setEdges(allEdgesRef.current.filter(
+      (e) => visibleIds.has(e.source) && visibleIds.has(e.target)
+    ));
+  }, [layers, setNodes, setEdges]);
 
   const workflowName = graphData?.graph.metadata?.process_name
     ? String(graphData.graph.metadata.process_name)
@@ -350,7 +394,7 @@ export default function SpatialWorkflowPage() {
               Layers
             </div>
             <div className="space-y-1.5">
-              {(Object.keys(layers) as LayerKey[]).map((k) => (
+              {(Object.keys(LAYER_LABELS) as LayerKey[]).map((k) => (
                 <label key={k} className="flex items-center gap-2 px-1 cursor-pointer group">
                   <input
                     type="checkbox"
