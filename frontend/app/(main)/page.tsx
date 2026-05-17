@@ -1,8 +1,16 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { api, ProcessSummaryResponse } from "@/lib/api";
+
+const SUPPORTED_EXTENSIONS = [".pdf", ".eml", ".zip", ".txt", ".md"];
+
+function isSupportedFile(file: File): boolean {
+  const name = file.name.toLowerCase();
+  return SUPPORTED_EXTENSIONS.some((ext) => name.endsWith(ext));
+}
 
 // ---------------------------------------------------------------------------
 // Icons
@@ -148,11 +156,75 @@ function ActivityItem({
 // ---------------------------------------------------------------------------
 
 export default function Home() {
+  const router = useRouter();
   const [processes, setProcesses] = useState<ProcessSummaryResponse[]>([]);
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [skippedCount, setSkippedCount] = useState(0);
+  const [dragOver, setDragOver] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const dirInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     api.listProcesses({ limit: 3 }).then(setProcesses).catch(() => {});
   }, []);
+
+  // Set webkitdirectory on the directory input — not in React's type defs
+  useEffect(() => {
+    if (dirInputRef.current) {
+      dirInputRef.current.setAttribute("webkitdirectory", "");
+      dirInputRef.current.setAttribute("multiple", "");
+    }
+  }, []);
+
+  async function handleFiles(files: File[]) {
+    setUploadError(null);
+    const supported = files.filter(isSupportedFile);
+    const skipped = files.length - supported.length;
+    setSkippedCount(skipped);
+
+    if (supported.length === 0) {
+      setUploadError("No supported files selected (PDF, EML, ZIP, TXT, MD).");
+      return;
+    }
+
+    setUploading(true);
+    try {
+      const res =
+        supported.length === 1
+          ? await api.upload(supported[0])
+          : await api.uploadMultiple(supported);
+      router.push(`/runs/${res.run_id}`);
+    } catch (err) {
+      setUploadError(err instanceof Error ? err.message : "Upload failed");
+      setUploading(false);
+    }
+  }
+
+  function onDragOver(e: React.DragEvent) {
+    e.preventDefault();
+    setDragOver(true);
+  }
+
+  function onDragLeave(e: React.DragEvent) {
+    // Only clear if leaving the card itself, not a child element
+    if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+      setDragOver(false);
+    }
+  }
+
+  function onDrop(e: React.DragEvent) {
+    e.preventDefault();
+    setDragOver(false);
+    const files = Array.from(e.dataTransfer.files);
+    if (files.length > 0) handleFiles(files);
+  }
+
+  function onFileInputChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(e.target.files ?? []);
+    if (files.length > 0) handleFiles(files);
+    e.target.value = "";
+  }
 
   const recentActivity = [
     { label: "Deposit Processing Workflow", when: "Updated 2h ago", color: "bg-emerald-500" },
@@ -200,9 +272,16 @@ export default function Home() {
 
         {/* Action cards + Recent activity */}
         <div className="flex gap-6 mb-10">
-          {/* Upload card */}
-          <div className="card p-6 flex-1 flex flex-col items-center text-center gap-4 min-w-0">
-            <div className="text-[var(--accent)]">
+          {/* Upload card — drag-and-drop zone (UI-019), file picker (UI-020), folder picker (UI-021) */}
+          <div
+            className={`card p-6 flex-1 flex flex-col items-center text-center gap-4 min-w-0 transition-colors ${
+              dragOver ? "border-[var(--accent)] bg-[var(--surface-soft)]" : ""
+            }`}
+            onDragOver={onDragOver}
+            onDragLeave={onDragLeave}
+            onDrop={onDrop}
+          >
+            <div className="text-[var(--accent)] transition-opacity">
               <IconUploadCloud />
             </div>
             <div>
@@ -210,17 +289,59 @@ export default function Home() {
                 Upload operational artifacts
               </div>
               <div className="text-[12px] text-[var(--text-muted)] leading-relaxed">
-                Drag &amp; drop or browse<br />
-                PDF, DOCX, EML, CSV, PNG, ZIP + more
+                {dragOver ? (
+                  <span className="text-[var(--accent)] font-medium">Drop files here</span>
+                ) : (
+                  <>Drag &amp; drop or browse<br />PDF, EML, ZIP, TXT, MD</>
+                )}
               </div>
             </div>
-            <Link
-              href="/runs/upload"
-              className="mt-auto inline-flex items-center justify-center px-5 py-2 rounded-btn text-[13px] font-semibold text-white transition-colors"
-              style={{ background: "var(--accent)" }}
-            >
-              Upload files
-            </Link>
+
+            <div className="mt-auto flex flex-col items-center gap-2 w-full">
+              {uploading ? (
+                <span className="text-[13px] text-[var(--text-muted)] animate-pulse">Uploading…</span>
+              ) : (
+                <>
+                  <button
+                    onClick={() => fileInputRef.current?.click()}
+                    className="inline-flex items-center justify-center px-5 py-2 rounded-btn text-[13px] font-semibold text-white transition-colors w-full"
+                    style={{ background: "var(--accent)" }}
+                  >
+                    Upload files
+                  </button>
+                  <button
+                    onClick={() => dirInputRef.current?.click()}
+                    className="text-[12px] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
+                  >
+                    Or choose a folder
+                  </button>
+                </>
+              )}
+              {uploadError && (
+                <p className="text-[11px] text-red-500 mt-1">{uploadError}</p>
+              )}
+              {skippedCount > 0 && !uploadError && (
+                <p className="text-[11px] text-[var(--text-muted)]">
+                  {skippedCount} unsupported file{skippedCount > 1 ? "s" : ""} skipped
+                </p>
+              )}
+            </div>
+
+            {/* Hidden file inputs */}
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".pdf,.eml,.zip,.txt,.md"
+              multiple
+              className="hidden"
+              onChange={onFileInputChange}
+            />
+            <input
+              ref={dirInputRef}
+              type="file"
+              className="hidden"
+              onChange={onFileInputChange}
+            />
           </div>
 
           {/* Connect source card */}
@@ -287,13 +408,13 @@ export default function Home() {
             <p className="text-[14px] text-[var(--text-muted)]">
               No workflows yet. Upload an artifact to get started.
             </p>
-            <Link
-              href="/runs/upload"
+            <button
+              onClick={() => fileInputRef.current?.click()}
               className="mt-4 inline-flex items-center justify-center px-5 py-2 rounded-btn text-[13px] font-semibold text-white transition-colors"
               style={{ background: "var(--accent)" }}
             >
               Upload files
-            </Link>
+            </button>
           </div>
         )}
       </div>

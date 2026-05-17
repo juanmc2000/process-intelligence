@@ -503,6 +503,42 @@ workflows require human review. All explainability logic is deterministic and tr
 
 ---
 
+---
+
+## Sprint 8B — Home Upload UX Improvements
+
+**Goal:** Make artifact ingestion faster and more natural. Users can drag files directly onto
+the Home upload card, open the file picker without navigating away, and select a whole folder
+for batch upload — all using the existing upload pipeline.
+
+### UI-019 — Drag-and-drop upload on Home upload card
+
+- [x] User can drag files onto the "Upload Operational Artifacts" card
+- [x] Drop zone highlights with accent border and "Drop files here" hint while dragging
+- [x] Dropped files are submitted through the existing upload flow
+- [x] Existing browse upload continues to work
+- [x] Home page layout is unchanged
+
+### UI-020 — Upload Files action opens file picker directly
+
+- [x] Clicking "Upload Files" opens the OS file picker immediately
+- [x] User is not routed to `/runs/upload` first
+- [x] Selected files upload via existing API; run status page loads on success
+- [x] Empty-state "Upload files" button also opens file picker directly
+- [x] No visual design changes beyond removing the navigation step
+
+### UI-021 — Directory upload selection support
+
+- [x] "Or choose a folder" button triggers a directory picker (`webkitdirectory`)
+- [x] Files inside the selected directory are collected client-side
+- [x] Supported files (.pdf, .eml, .zip, .txt, .md) upload via `api.uploadMultiple`
+- [x] Unsupported files are silently skipped with a count shown to the user
+- [x] Full local paths are never exposed — only filenames used
+- [x] Existing drag-and-drop and browse upload continue to work
+- [x] `api.uploadMultiple` added to the typed API client in `frontend/lib/api.ts`
+
+---
+
 ## Definition of Done (per Sprint)
 
 All checkpoints for the sprint pass. The smoke test suite runs green against
