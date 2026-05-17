@@ -95,22 +95,6 @@ function IconChevronDown() {
   );
 }
 
-function IconChevronRight() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="w-3.5 h-3.5">
-      <polyline points="9 18 15 12 9 6" />
-    </svg>
-  );
-}
-
-function IconSparkle() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" className="w-3.5 h-3.5">
-      <path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 17l-6.2 4.3 2.4-7.4L2 9.4h7.6z" />
-    </svg>
-  );
-}
-
 // ---------------------------------------------------------------------------
 // Layer toggle
 // ---------------------------------------------------------------------------
