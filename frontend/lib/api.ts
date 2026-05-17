@@ -315,7 +315,7 @@ export const api = {
   async upload(file: File): Promise<UploadResponse> {
     const form = new FormData();
     form.append("files", file);
-    const res = await fetch(`${API_BASE}/upload`, {
+    const res = await fetch(`${API_BASE}/runs/upload`, {
       method: "POST",
       body: form,
       cache: "no-store",
@@ -331,7 +331,7 @@ export const api = {
   async uploadMultiple(files: File[]): Promise<UploadResponse> {
     const form = new FormData();
     files.forEach((f) => form.append("files", f));
-    const res = await fetch(`${API_BASE}/upload`, {
+    const res = await fetch(`${API_BASE}/runs/upload`, {
       method: "POST",
       body: form,
       cache: "no-store",
