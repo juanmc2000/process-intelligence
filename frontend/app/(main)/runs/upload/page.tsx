@@ -37,13 +37,13 @@ export default function UploadPage() {
     <div className="max-w-md">
       <h1 className="text-xl font-semibold mb-1">Upload artifact</h1>
       <p className="text-sm text-gray-500 mb-6">
-        Supported formats: PDF, EML, ZIP, TXT, MD
+        Supported formats: PDF, DOCX, EML, ZIP, TXT, MD
       </p>
 
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
         <input
           type="file"
-          accept=".pdf,.eml,.zip,.txt,.md"
+          accept=".pdf,.docx,.eml,.zip,.txt,.md"
           onChange={(e) => setFile(e.target.files?.[0] ?? null)}
           className="block w-full text-sm text-gray-700 file:mr-4 file:py-2 file:px-4
                      file:rounded file:border-0 file:text-sm file:font-medium

@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { api, ProcessSummaryResponse } from "@/lib/api";
 
-const SUPPORTED_EXTENSIONS = [".pdf", ".eml", ".zip", ".txt", ".md"];
+const SUPPORTED_EXTENSIONS = [".pdf", ".docx", ".eml", ".zip", ".txt", ".md"];
 
 function isSupportedFile(file: File): boolean {
   const name = file.name.toLowerCase();
@@ -292,7 +292,7 @@ export default function Home() {
                 {dragOver ? (
                   <span className="text-[var(--accent)] font-medium">Drop files here</span>
                 ) : (
-                  <>Drag &amp; drop or browse<br />PDF, EML, ZIP, TXT, MD</>
+                  <>Drag &amp; drop or browse<br />PDF, DOCX, EML, ZIP, TXT, MD</>
                 )}
               </div>
             </div>
@@ -331,7 +331,7 @@ export default function Home() {
             <input
               ref={fileInputRef}
               type="file"
-              accept=".pdf,.eml,.zip,.txt,.md"
+              accept=".pdf,.docx,.eml,.zip,.txt,.md"
               multiple
               className="hidden"
               onChange={onFileInputChange}
