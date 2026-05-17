@@ -327,6 +327,22 @@ export const api = {
     return res.json() as Promise<UploadResponse>;
   },
 
+  /** Upload multiple files in one request using the multi-file upload endpoint */
+  async uploadMultiple(files: File[]): Promise<UploadResponse> {
+    const form = new FormData();
+    files.forEach((f) => form.append("files", f));
+    const res = await fetch(`${API_BASE}/upload`, {
+      method: "POST",
+      body: form,
+      cache: "no-store",
+    });
+    if (!res.ok) {
+      const text = await res.text().catch(() => res.statusText);
+      throw new Error(`Upload failed (${res.status}): ${text}`);
+    }
+    return res.json() as Promise<UploadResponse>;
+  },
+
   /** Get run detail (status, sources, artifacts, events, extraction) */
   getRun(runId: string): Promise<RunDetailResponse> {
     return get<RunDetailResponse>(`/runs/${runId}`);
