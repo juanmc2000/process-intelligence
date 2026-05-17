@@ -297,14 +297,14 @@ export default function Home() {
               </div>
             </div>
 
-            <div className="mt-auto flex flex-col items-center gap-2 w-full">
+            <div className="mt-auto flex flex-col items-center gap-2">
               {uploading ? (
                 <span className="text-[13px] text-[var(--text-muted)] animate-pulse">Uploading…</span>
               ) : (
                 <>
                   <button
                     onClick={() => fileInputRef.current?.click()}
-                    className="inline-flex items-center justify-center px-5 py-2 rounded-btn text-[13px] font-semibold text-white transition-colors w-full"
+                    className="inline-flex items-center justify-center px-5 py-2 rounded-btn text-[13px] font-semibold text-white transition-colors"
                     style={{ background: "var(--accent)" }}
                   >
                     Upload files
