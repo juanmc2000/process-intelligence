@@ -276,7 +276,7 @@ function SourcesTab({ runDetail, loadingRun }: { runDetail: RunDetailResponse | 
     if (!types.includes(a.artifact_type)) types.push(a.artifact_type);
   }
 
-  const artifactTypes = [...new Set(artifacts.map((a) => a.artifact_type))];
+  const artifactTypes = Array.from(new Set(artifacts.map((a) => a.artifact_type)));
 
   return (
     <div className="px-8 py-8 max-w-4xl space-y-6">
