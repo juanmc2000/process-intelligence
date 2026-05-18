@@ -26,17 +26,6 @@ function IconUploadCloud() {
   );
 }
 
-function IconConnect() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" className="w-9 h-9">
-      <circle cx="18" cy="18" r="3" />
-      <circle cx="6" cy="6" r="3" />
-      <circle cx="6" cy="18" r="3" />
-      <line x1="6" y1="9" x2="6" y2="15" />
-      <path d="M13 6h3a2 2 0 0 1 2 2v7" />
-    </svg>
-  );
-}
 
 function IconClock() {
   return (
@@ -342,29 +331,6 @@ export default function Home() {
               className="hidden"
               onChange={onFileInputChange}
             />
-          </div>
-
-          {/* Connect source card */}
-          <div className="card p-6 flex-1 flex flex-col items-center text-center gap-4 min-w-0 opacity-60">
-            <div className="text-[var(--text-secondary)]">
-              <IconConnect />
-            </div>
-            <div>
-              <div className="text-[15px] font-semibold text-[var(--text-primary)] mb-1">
-                Connect approved source
-              </div>
-              <div className="text-[12px] text-[var(--text-muted)] leading-relaxed">
-                Slack, Teams, SharePoint, Email,<br />
-                Jira, Confluence + more
-              </div>
-            </div>
-            <button
-              disabled
-              title="Coming soon"
-              className="mt-auto inline-flex items-center justify-center px-5 py-2 rounded-btn text-[13px] font-semibold border border-[var(--border-soft)] text-[var(--text-muted)] cursor-not-allowed"
-            >
-              Coming soon
-            </button>
           </div>
 
           {/* Recent activity */}
