@@ -408,13 +408,6 @@ export default function Home() {
             <p className="text-[14px] text-[var(--text-muted)]">
               No workflows yet. Upload an artifact to get started.
             </p>
-            <button
-              onClick={() => fileInputRef.current?.click()}
-              className="mt-4 inline-flex items-center justify-center px-5 py-2 rounded-btn text-[13px] font-semibold text-white transition-colors"
-              style={{ background: "var(--accent)" }}
-            >
-              Upload files
-            </button>
           </div>
         )}
       </div>
