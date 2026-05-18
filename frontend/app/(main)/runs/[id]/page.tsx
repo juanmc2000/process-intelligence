@@ -5,11 +5,100 @@ import { useParams } from "next/navigation";
 import Link from "next/link";
 import { api, RunDetailResponse } from "@/lib/api";
 
-/**
- * Run status page — shows run metadata, sources, artifacts, and extraction status.
- * Auto-refreshes while the run is in a non-terminal state.
- * Displays structured metadata only — no raw customer content.
- */
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+function friendlyFileType(contentType: string | null, filename: string): string {
+  if (contentType) {
+    if (contentType.includes("pdf")) return "PDF";
+    if (contentType.includes("wordprocessingml") || contentType.includes("docx")) return "DOCX";
+    if (contentType.includes("zip")) return "ZIP";
+    if (contentType.includes("text/plain")) return "TXT";
+    if (contentType.includes("message/rfc822")) return "EML";
+    if (contentType.includes("markdown")) return "MD";
+  }
+  const ext = filename.split(".").pop()?.toUpperCase();
+  return ext ?? "FILE";
+}
+
+function formatBytes(bytes: number | null): string {
+  if (bytes == null) return "—";
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function formatDate(iso: string): string {
+  try {
+    return new Date(iso).toLocaleString(undefined, {
+      dateStyle: "medium",
+      timeStyle: "short",
+    });
+  } catch {
+    return iso;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Status badge
+// ---------------------------------------------------------------------------
+
+function StatusBadge({ value }: { value: string }) {
+  const cfg =
+    value === "completed"
+      ? { cls: "bg-emerald-100 text-emerald-700", label: "Completed" }
+      : value === "failed"
+      ? { cls: "bg-red-100 text-red-600", label: "Failed" }
+      : value === "error"
+      ? { cls: "bg-red-100 text-red-600", label: "Error" }
+      : value === "parsed"
+      ? { cls: "bg-sky-100 text-sky-700", label: "Parsed" }
+      : value === "uploaded"
+      ? { cls: "bg-blue-100 text-blue-700", label: "Uploaded" }
+      : { cls: "bg-amber-100 text-amber-700", label: value };
+
+  return (
+    <span
+      className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-semibold ${cfg.cls}`}
+    >
+      {cfg.label}
+    </span>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Meta row
+// ---------------------------------------------------------------------------
+
+function MetaRow({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="flex items-center gap-4 py-1.5">
+      <span className="text-[12px] text-[var(--text-muted)] w-32 shrink-0">{label}</span>
+      <div>{children}</div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Section heading
+// ---------------------------------------------------------------------------
+
+function SectionHeading({ title, count }: { title: string; count?: number }) {
+  return (
+    <div className="flex items-center gap-2 mb-5">
+      <h2 className="text-[15px] font-semibold text-[var(--text-primary)]">{title}</h2>
+      {count != null && (
+        <span className="text-[12px] text-[var(--text-muted)]">({count})</span>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Page
+// ---------------------------------------------------------------------------
+
 export default function RunPage() {
   const params = useParams();
   const runId = params.id as string;
@@ -29,12 +118,10 @@ export default function RunPage() {
 
   useEffect(() => {
     load();
-    // Poll every 3 s while the run is still active
     const interval = setInterval(async () => {
       const data = await api.getRun(runId).catch(() => null);
       if (!data) return;
       setRun(data);
-      // Stop polling once terminal
       if (["completed", "failed", "error"].includes(data.status)) {
         clearInterval(interval);
       }
@@ -43,126 +130,146 @@ export default function RunPage() {
   }, [runId, load]);
 
   if (error) {
-    return <p className="text-sm text-red-600">{error}</p>;
+    return (
+      <div className="px-8 py-8">
+        <p className="text-[13px]" style={{ color: "var(--danger)" }}>{error}</p>
+      </div>
+    );
   }
+
   if (!run) {
-    return <p className="text-sm text-gray-500">Loading…</p>;
+    return (
+      <div className="px-8 py-8">
+        <p className="text-[13px] text-[var(--text-muted)]">Loading…</p>
+      </div>
+    );
   }
 
   const extractionDone =
     run.extraction?.status === "completed" && run.extraction.process_ir_uri;
 
   return (
-    <div className="max-w-2xl space-y-6">
-      <div>
-        <h1 className="text-xl font-semibold mb-1">Run</h1>
-        <p className="text-xs font-mono text-gray-500 break-all">{run.id}</p>
+    <div className="flex flex-col h-full">
+      {/* Top bar */}
+      <div className="px-8 py-5 bg-white border-b border-[var(--border-soft)] header-divider flex items-start justify-between gap-6">
+        <div className="min-w-0">
+          <div className="flex items-center gap-1.5 text-[12px] text-[var(--text-muted)] mb-1.5">
+            <Link
+              href="/runs/upload"
+              className="hover:text-[var(--text-primary)] transition-colors"
+            >
+              Uploads
+            </Link>
+            <span>/</span>
+            <span className="text-[var(--text-secondary)]">Run detail</span>
+          </div>
+          <h1 className="text-[22px] font-bold text-[var(--text-primary)] leading-tight">
+            Run detail
+          </h1>
+          <p className="text-[11px] font-mono text-[var(--text-muted)] mt-0.5 truncate max-w-lg">
+            {run.id}
+          </p>
+        </div>
+
+        {/* Status badges */}
+        <div className="flex items-center gap-2 shrink-0 pt-1">
+          <span className="text-[12px] text-[var(--text-muted)]">Run</span>
+          <StatusBadge value={run.status} />
+          {run.extraction && (
+            <>
+              <span className="text-[var(--border-strong)]">·</span>
+              <span className="text-[12px] text-[var(--text-muted)]">Extraction</span>
+              <StatusBadge value={run.extraction.status} />
+            </>
+          )}
+        </div>
       </div>
 
-      {/* Status badges */}
-      <section className="flex gap-4 flex-wrap">
-        <StatusBadge label="Run" value={run.status} />
-        {run.extraction && (
-          <StatusBadge label="Extraction" value={run.extraction.status} />
+      {/* Content */}
+      <div className="flex-1 overflow-y-auto px-8 py-8 space-y-5">
+        {/* Error message */}
+        {run.error_message && (
+          <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-[13px] text-red-700">
+            {run.error_message}
+          </div>
         )}
-      </section>
 
-      {run.error_message && (
-        <p className="text-sm text-red-600">{run.error_message}</p>
-      )}
-
-      {/* Sources */}
-      {run.sources.length > 0 && (
-        <section>
-          <h2 className="text-sm font-medium mb-2">Sources</h2>
-          <table className="w-full text-xs border border-gray-200 rounded overflow-hidden">
-            <thead className="bg-gray-100">
-              <tr>
-                <th className="text-left px-3 py-2">Filename</th>
-                <th className="text-left px-3 py-2">Type</th>
-                <th className="text-left px-3 py-2">Size</th>
-                <th className="text-left px-3 py-2">Status</th>
-              </tr>
-            </thead>
-            <tbody>
+        {/* Sources */}
+        {run.sources.length > 0 && (
+          <div className="card p-6">
+            <SectionHeading title="Sources" count={run.sources.length} />
+            <div>
               {run.sources.map((s) => (
-                <tr key={s.id} className="border-t border-gray-200">
-                  <td className="px-3 py-2 font-mono">{s.filename}</td>
-                  <td className="px-3 py-2 text-gray-500">
-                    {s.content_type ?? "—"}
-                  </td>
-                  <td className="px-3 py-2 text-gray-500">
-                    {s.size_bytes != null
-                      ? `${(s.size_bytes / 1024).toFixed(1)} KB`
-                      : "—"}
-                  </td>
-                  <td className="px-3 py-2">{s.status}</td>
-                </tr>
+                <div
+                  key={s.id}
+                  className="flex items-center gap-4 py-3 border-b border-[var(--border-soft)] last:border-0"
+                >
+                  <span className="flex-1 min-w-0 text-[13px] font-medium text-[var(--text-primary)] font-mono truncate">
+                    {s.filename}
+                  </span>
+                  <span className="text-[11px] font-semibold text-[var(--text-secondary)] bg-[var(--surface-muted)] border border-[var(--border-soft)] rounded-md px-2 py-0.5 shrink-0">
+                    {friendlyFileType(s.content_type, s.filename)}
+                  </span>
+                  <span className="text-[12px] text-[var(--text-muted)] w-16 text-right shrink-0 tabular-nums">
+                    {formatBytes(s.size_bytes)}
+                  </span>
+                  <div className="shrink-0">
+                    <StatusBadge value={s.status} />
+                  </div>
+                </div>
               ))}
-            </tbody>
-          </table>
-        </section>
-      )}
+            </div>
+          </div>
+        )}
 
-      {/* Extraction summary */}
-      {run.extraction && (
-        <section>
-          <h2 className="text-sm font-medium mb-2">Extraction</h2>
-          <dl className="text-xs space-y-1">
-            <Row label="Status" value={run.extraction.status} />
-            <Row
-              label="Schema version"
-              value={run.extraction.schema_version ?? "—"}
-            />
-          </dl>
-          {extractionDone && (
-            <div className="mt-3 flex gap-3">
+        {/* Extraction */}
+        {run.extraction && (
+          <div className="card p-6">
+            <SectionHeading title="Extraction" />
+            <div className="space-y-0.5 mb-6">
+              <MetaRow label="Status">
+                <StatusBadge value={run.extraction.status} />
+              </MetaRow>
+              <MetaRow label="Schema version">
+                <span className="text-[13px] font-mono text-[var(--text-secondary)]">
+                  {run.extraction.schema_version ?? "—"}
+                </span>
+              </MetaRow>
+            </div>
+            {extractionDone && (
               <Link
                 href={`/runs/${runId}/review`}
-                className="px-3 py-1.5 bg-blue-600 text-white text-xs rounded hover:bg-blue-700 transition-colors"
+                className="inline-flex items-center justify-center px-5 py-2 rounded-btn text-[13px] font-semibold text-white transition-colors"
+                style={{ background: "var(--accent)" }}
               >
                 Review extraction
               </Link>
-            </div>
-          )}
-        </section>
-      )}
+            )}
+            {!extractionDone && run.extraction.status !== "completed" && (
+              <p className="text-[12px] text-[var(--text-muted)] italic">
+                Processing — review will be available once extraction completes.
+              </p>
+            )}
+          </div>
+        )}
 
-      {/* Timestamps */}
-      <section>
-        <h2 className="text-sm font-medium mb-2">Timestamps</h2>
-        <dl className="text-xs space-y-1">
-          <Row label="Created" value={String(run.created_at)} />
-          <Row label="Updated" value={String(run.updated_at)} />
-        </dl>
-      </section>
-    </div>
-  );
-}
-
-function StatusBadge({ label, value }: { label: string; value: string }) {
-  const color =
-    value === "completed"
-      ? "bg-green-100 text-green-700"
-      : value === "failed" || value === "error"
-        ? "bg-red-100 text-red-700"
-        : "bg-yellow-100 text-yellow-700";
-
-  return (
-    <div className="flex items-center gap-2">
-      <span className="text-xs text-gray-500">{label}</span>
-      <span className={`text-xs px-2 py-0.5 rounded font-medium ${color}`}>
-        {value}
-      </span>
-    </div>
-  );
-}
-
-function Row({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex gap-2">
-      <dt className="text-gray-500 w-32 shrink-0">{label}</dt>
-      <dd className="font-mono break-all">{value}</dd>
+        {/* Timeline */}
+        <div className="card p-6">
+          <SectionHeading title="Timeline" />
+          <div className="space-y-0.5">
+            <MetaRow label="Created">
+              <span className="text-[13px] text-[var(--text-secondary)]">
+                {formatDate(run.created_at)}
+              </span>
+            </MetaRow>
+            <MetaRow label="Last updated">
+              <span className="text-[13px] text-[var(--text-secondary)]">
+                {formatDate(run.updated_at)}
+              </span>
+            </MetaRow>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
