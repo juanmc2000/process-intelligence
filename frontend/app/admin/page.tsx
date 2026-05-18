@@ -204,6 +204,24 @@ export default function AdminOverviewPage() {
 
           {/* Right column */}
           <div className="space-y-4">
+            {/* Connect sources */}
+            <div className="card p-5">
+              <h2 className="text-[15px] font-semibold text-[var(--text-primary)] mb-1">
+                Connect sources
+              </h2>
+              <p className="text-[12px] text-[var(--text-muted)] mb-4 leading-relaxed">
+                Connect your organisation&apos;s source systems to enable automatic artifact ingestion.
+                Slack, Teams, SharePoint, Email, Jira, Confluence + more.
+              </p>
+              <button
+                disabled
+                title="Coming soon"
+                className="inline-flex items-center justify-center px-4 py-1.5 rounded-btn text-[12px] font-semibold border border-[var(--border-soft)] text-[var(--text-muted)] cursor-not-allowed"
+              >
+                Coming soon
+              </button>
+            </div>
+
             {/* Security posture */}
             <div className="card p-5">
               <div className="flex items-start justify-between gap-4">
